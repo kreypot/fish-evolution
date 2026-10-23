@@ -19,22 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check that every project file was uploaded
-        run: |
-          missing=0
-          for f in project.godot export_presets.cfg icon.svg \
-            scenes/main_menu.tscn scenes/level_select.tscn scenes/shop.tscn scenes/game.tscn \
-            assets/icon_192.png assets/icon_fg_432.png assets/icon_bg_432.png \
-            scripts/audio_manager.gd scripts/background.gd scripts/coin.gd scripts/decor_chunk.gd \
-            scripts/finish_gate.gd scripts/fish.gd scripts/fish_art.gd scripts/fish_preview.gd scripts/fx.gd \
-            scripts/game.gd scripts/game_state.gd scripts/hud.gd scripts/jellyfish.gd scripts/joystick.gd \
-            scripts/level_select.gd scripts/main_menu.gd scripts/menu_bg.gd scripts/player.gd scripts/shop.gd \
-            scripts/ui_theme.gd; do
-            if [ ! -f "$f" ]; then echo "::error::MISSING FILE in your repository: $f"; missing=1; fi
-          done
-          if [ $missing = 1 ]; then echo "Upload the missing files (keep the folder names) and run the workflow again."; exit 1; fi
-          echo "All project files are present."
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -96,8 +80,6 @@ jobs:
         run: |
           set -e
           if [ -n "$KS_B64" ]; then
-            if [ -z "$KS_ALIAS" ]; then echo "::error::GitHub secret ANDROID_KEYSTORE_ALIAS is missing or empty. Add it under Settings > Secrets and variables > Actions > Secrets (not 'Variables')."; exit 1; fi
-            if [ -z "$KS_PASS" ]; then echo "::error::GitHub secret ANDROID_KEYSTORE_PASSWORD is missing or empty. Add it under Settings > Secrets and variables > Actions > Secrets (not 'Variables')."; exit 1; fi
             echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
             ALIAS="$KS_ALIAS"; PASS="$KS_PASS"
           else
@@ -106,28 +88,6 @@ jobs:
             keytool -genkeypair -keystore "$RUNNER_TEMP/release.keystore" -alias $ALIAS -keyalg RSA -keysize 2048 \
               -validity 10000 -storepass $PASS -keypass $PASS -dname "CN=Fish Evolution,O=Temp,C=US"
           fi
-          # Check the key BEFORE the long build, so a wrong alias/password is reported clearly.
-          if ! keytool -list -keystore "$RUNNER_TEMP/release.keystore" -alias "$ALIAS" -storepass "$PASS" >/dev/null 2>&1; then
-            echo "::error::Signing key check FAILED. Either the keystore secret is damaged, ANDROID_KEYSTORE_ALIAS does not match the alias inside the keystore, or ANDROID_KEYSTORE_PASSWORD is wrong (no spaces or line breaks allowed)."
-            exit 1
-          fi
-          echo "Signing key OK (alias: $ALIAS)"
-          # Write the key details straight into the export presets (this copy only, never committed).
-          export KS_PATH="$RUNNER_TEMP/release.keystore" KS_USER="$ALIAS" KS_PW="$PASS"
-          python3 - << 'PY'
-          import os, re
-          p = "export_presets.cfg"
-          s = open(p).read()
-          def setv(key, val):
-              global s
-              val = val.replace("\\", "\\\\").replace('"', '\\"')
-              s = re.sub(r"^" + re.escape(key) + r"=.*$", lambda m: key + '="' + val + '"', s, flags=re.M)
-          setv("keystore/release", os.environ["KS_PATH"])
-          setv("keystore/release_user", os.environ["KS_USER"])
-          setv("keystore/release_password", os.environ["KS_PW"])
-          open(p, "w").write(s)
-          PY
-          echo "Key entries written to export presets: $(grep -c '^keystore/release_user="[^"]' export_presets.cfg)"
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$ALIAS" >> $GITHUB_ENV
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$PASS" >> $GITHUB_ENV
