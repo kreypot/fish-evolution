@@ -96,6 +96,8 @@ jobs:
         run: |
           set -e
           if [ -n "$KS_B64" ]; then
+            if [ -z "$KS_ALIAS" ]; then echo "::error::GitHub secret ANDROID_KEYSTORE_ALIAS is missing or empty. Add it under Settings > Secrets and variables > Actions > Secrets (not 'Variables')."; exit 1; fi
+            if [ -z "$KS_PASS" ]; then echo "::error::GitHub secret ANDROID_KEYSTORE_PASSWORD is missing or empty. Add it under Settings > Secrets and variables > Actions > Secrets (not 'Variables')."; exit 1; fi
             echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
             ALIAS="$KS_ALIAS"; PASS="$KS_PASS"
           else
@@ -110,6 +112,22 @@ jobs:
             exit 1
           fi
           echo "Signing key OK (alias: $ALIAS)"
+          # Write the key details straight into the export presets (this copy only, never committed).
+          export KS_PATH="$RUNNER_TEMP/release.keystore" KS_USER="$ALIAS" KS_PW="$PASS"
+          python3 - << 'PY'
+          import os, re
+          p = "export_presets.cfg"
+          s = open(p).read()
+          def setv(key, val):
+              global s
+              val = val.replace("\\", "\\\\").replace('"', '\\"')
+              s = re.sub(r"^" + re.escape(key) + r"=.*$", lambda m: key + '="' + val + '"', s, flags=re.M)
+          setv("keystore/release", os.environ["KS_PATH"])
+          setv("keystore/release_user", os.environ["KS_USER"])
+          setv("keystore/release_password", os.environ["KS_PW"])
+          open(p, "w").write(s)
+          PY
+          echo "Key entries written to export presets: $(grep -c '^keystore/release_user="[^"]' export_presets.cfg)"
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$ALIAS" >> $GITHUB_ENV
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$PASS" >> $GITHUB_ENV
