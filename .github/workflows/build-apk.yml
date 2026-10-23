@@ -19,6 +19,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check that every project file was uploaded
+        run: |
+          missing=0
+          for f in project.godot export_presets.cfg icon.svg \
+            scenes/main_menu.tscn scenes/level_select.tscn scenes/shop.tscn scenes/game.tscn \
+            assets/icon_192.png assets/icon_fg_432.png assets/icon_bg_432.png \
+            scripts/audio_manager.gd scripts/background.gd scripts/coin.gd scripts/decor_chunk.gd \
+            scripts/finish_gate.gd scripts/fish.gd scripts/fish_art.gd scripts/fish_preview.gd scripts/fx.gd \
+            scripts/game.gd scripts/game_state.gd scripts/hud.gd scripts/jellyfish.gd scripts/joystick.gd \
+            scripts/level_select.gd scripts/main_menu.gd scripts/menu_bg.gd scripts/player.gd scripts/shop.gd \
+            scripts/ui_theme.gd; do
+            if [ ! -f "$f" ]; then echo "::error::MISSING FILE in your repository: $f"; missing=1; fi
+          done
+          if [ $missing = 1 ]; then echo "Upload the missing files (keep the folder names) and run the workflow again."; exit 1; fi
+          echo "All project files are present."
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -70,8 +86,10 @@ jobs:
 
       - name: Run rule tests and smoke test (informational)
         continue-on-error: true
-        run: ./tools/smoke_test.sh
+        run: bash ./tools/smoke_test.sh
 
+      # We do not let Godot sign (its keystore check is picky). Godot builds UNSIGNED files and the next
+      # steps sign them with standard Java/Android tools using your key.
       - name: Prepare signing key
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -80,30 +98,59 @@ jobs:
         run: |
           set -e
           if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-            ALIAS="$KS_ALIAS"; PASS="$KS_PASS"
+            if [ -z "$KS_ALIAS" ]; then echo "::error::GitHub secret ANDROID_KEYSTORE_ALIAS is missing or empty. Add it under Settings > Secrets and variables > Actions > Secrets (not 'Variables')."; exit 1; fi
+            if [ -z "$KS_PASS" ]; then echo "::error::GitHub secret ANDROID_KEYSTORE_PASSWORD is missing or empty. Add it under Settings > Secrets and variables > Actions > Secrets (not 'Variables')."; exit 1; fi
+            # strip stray spaces/line breaks that sneak in when pasting
+            printf '%s' "$KS_B64" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/release.keystore"
+            ALIAS=$(printf '%s' "$KS_ALIAS" | tr -d '\r\n')
+            PASS=$(printf '%s' "$KS_PASS" | tr -d '\r\n')
           else
             echo "::warning::No signing secrets found - using a throw-away key. Do NOT upload this build to Google Play."
             ALIAS=temp; PASS=temppass123
             keytool -genkeypair -keystore "$RUNNER_TEMP/release.keystore" -alias $ALIAS -keyalg RSA -keysize 2048 \
               -validity 10000 -storepass $PASS -keypass $PASS -dname "CN=Fish Evolution,O=Temp,C=US"
           fi
-          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
-          echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$ALIAS" >> $GITHUB_ENV
-          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$PASS" >> $GITHUB_ENV
+          # Check the key BEFORE the long build, so a wrong alias/password is reported clearly.
+          if ! keytool -list -keystore "$RUNNER_TEMP/release.keystore" -alias "$ALIAS" -storepass "$PASS" > "$RUNNER_TEMP/keytool.out" 2>&1; then
+            echo "keytool said:"; head -n 3 "$RUNNER_TEMP/keytool.out"
+            echo "::error::Signing key check FAILED. Either the keystore secret is damaged, ANDROID_KEYSTORE_ALIAS does not match the alias inside the keystore, or ANDROID_KEYSTORE_PASSWORD is wrong."
+            exit 1
+          fi
+          echo "Signing key OK (alias: $ALIAS)"
+          echo "KS_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
+          echo "KS_USER=$ALIAS" >> $GITHUB_ENV
+          echo "KS_PW=$PASS" >> $GITHUB_ENV
 
       # Play requires every upload to have a higher version code than the last one.
-      - name: Set version code from the run number
-        run: sed -i "s/^version\/code=.*/version\/code=$((GITHUB_RUN_NUMBER + 1))/" export_presets.cfg
+      - name: Set version code and switch Godot to unsigned output
+        run: |
+          sed -i "s/^version\/code=.*/version\/code=$((GITHUB_RUN_NUMBER + 1))/" export_presets.cfg
+          sed -i 's/^package\/signed=.*/package\/signed=false/' export_presets.cfg
+          grep -n "package/signed\|version/code" export_presets.cfg
 
-      - name: Export AAB (for Google Play)
+      - name: Export AAB (unsigned)
         run: |
           mkdir -p build
-          godot --headless --path . --export-release "Android AAB" build/FishEvolution-OceanRun.aab
+          godot --headless --path . --export-release "Android AAB" build/unsigned.aab
           ls -lh build
 
-      - name: Export APK (for installing directly on a phone)
-        run: godot --headless --path . --export-release "Android APK" build/FishEvolution-OceanRun.apk
+      - name: Export APK (unsigned)
+        run: godot --headless --path . --export-release "Android APK" build/unsigned.apk
+
+      - name: Sign the AAB (for Google Play)
+        run: |
+          cp build/unsigned.aab build/FishEvolution-OceanRun.aab
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$KS_PATH" -storepass:env KS_PW build/FishEvolution-OceanRun.aab "$KS_USER"
+          jarsigner -verify build/FishEvolution-OceanRun.aab | head -n 2
+
+      - name: Sign the APK (for installing on a phone)
+        run: |
+          BT=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)
+          "${BT}zipalign" -f -p 4 build/unsigned.apk build/aligned.apk
+          "${BT}apksigner" sign --ks "$KS_PATH" --ks-key-alias "$KS_USER" --ks-pass env:KS_PW --key-pass env:KS_PW --out build/FishEvolution-OceanRun.apk build/aligned.apk
+          "${BT}apksigner" verify build/FishEvolution-OceanRun.apk && echo "APK signature OK"
+          rm -f build/unsigned.aab build/unsigned.apk build/aligned.apk build/*.idsig
+          ls -lh build
 
       - name: Check target SDK and permissions of the APK
         run: |
