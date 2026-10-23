@@ -1,0 +1,127 @@
+name: Build Android (APK for testing + AAB for Google Play)
+
+# Runs on every push, manually (Actions tab > Run workflow) and when you push a tag like v1.0.0.
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # lets the workflow attach files to a GitHub Release
+
+env:
+  GODOT_VERSION: "4.7.2"   # Google Play needs target API 36, which Godot 4.7+ templates provide
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # If Godot's export log complains about a missing SDK component, adjust this list to the
+      # versions in the "Exporting for Android" page of the Godot 4.7 docs.
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools build-tools;36.1.0 build-tools;35.0.1 platforms;android-36 platforms;android-35 cmake;3.10.2.4988404 ndk;28.1.13356709"
+
+      - name: Install Godot and export templates
+        run: |
+          set -e
+          BASE=https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable
+          wget -q $BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          wget -q $BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz
+          unzip -q Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip
+          sudo mv Godot_v${GODOT_VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q Godot_v${GODOT_VERSION}-stable_export_templates.tpz -d tpz
+          mv tpz/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+          godot --version
+
+      - name: Tell Godot where the Android SDK and Java are
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.7.tres << EOT
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          EOT
+
+      # Google Play needs an AAB, which Godot builds with Gradle. This installs the
+      # "Android build template" (what Project > Install Android Build Template does in the editor).
+      - name: Install Android build template
+        run: |
+          set -e
+          mkdir -p android/build
+          unzip -q ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/android_source.zip -d android/build
+          printf "%s" "${GODOT_VERSION}.stable" > android/.build_version
+          touch android/build/.gdignore
+
+      - name: Import project
+        run: godot --headless --path . --import || true
+
+      - name: Run rule tests and smoke test (informational)
+        continue-on-error: true
+        run: ./tools/smoke_test.sh
+
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            ALIAS="$KS_ALIAS"; PASS="$KS_PASS"
+          else
+            echo "::warning::No signing secrets found - using a throw-away key. Do NOT upload this build to Google Play."
+            ALIAS=temp; PASS=temppass123
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.keystore" -alias $ALIAS -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass $PASS -keypass $PASS -dname "CN=Fish Evolution,O=Temp,C=US"
+          fi
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$RUNNER_TEMP/release.keystore" >> $GITHUB_ENV
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$ALIAS" >> $GITHUB_ENV
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$PASS" >> $GITHUB_ENV
+
+      # Play requires every upload to have a higher version code than the last one.
+      - name: Set version code from the run number
+        run: sed -i "s/^version\/code=.*/version\/code=$((GITHUB_RUN_NUMBER + 1))/" export_presets.cfg
+
+      - name: Export AAB (for Google Play)
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-release "Android AAB" build/FishEvolution-OceanRun.aab
+          ls -lh build
+
+      - name: Export APK (for installing directly on a phone)
+        run: godot --headless --path . --export-release "Android APK" build/FishEvolution-OceanRun.apk
+
+      - name: Check target SDK and permissions of the APK
+        run: |
+          AAPT=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)aapt
+          "$AAPT" dump badging build/FishEvolution-OceanRun.apk | grep -E "package:|targetSdkVersion|uses-permission" || true
+          echo "(no uses-permission lines above = the game requests no permissions)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FishEvolution-builds
+          path: |
+            build/FishEvolution-OceanRun.aab
+            build/FishEvolution-OceanRun.apk
+
+      - name: Publish GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/FishEvolution-OceanRun.apk
+            build/FishEvolution-OceanRun.aab
