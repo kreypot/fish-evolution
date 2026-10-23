@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fish Evolution: Ocean Run</title>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#fff;text-align:center;
+background:linear-gradient(#4fd1f5,#0f5f9a);min-height:100vh}
+main{max-width:640px;margin:0 auto;padding:60px 20px}
+h1{font-size:2.6rem;margin:.2em 0;color:#ffd23a;text-shadow:0 3px 0 #0b3d62}
+p{font-size:1.1rem;line-height:1.5}
+a.btn{display:inline-block;margin:18px 0;padding:16px 34px;border-radius:40px;background:#ffd23a;color:#0b3d62;
+font-weight:700;font-size:1.2rem;text-decoration:none;box-shadow:0 5px 0 #b8901a}
+small a{color:#fff}
+</style></head><body><main>
+<h1>Fish Evolution: Ocean Run</h1>
+<p>Eat smaller fish, dodge the big ones, and swim to the finish through 100 levels in 10 underwater worlds.<br>Free, offline, no ads, no data collection.</p>
+<a class="btn" id="dl" href="#">Download for Android (APK)</a>
+<p><small>After downloading, open the file and allow “Install unknown apps” for your browser if Android asks.<br>
+<a href="privacy-policy.html">Privacy policy</a></small></p>
+</main>
+<script>
+// On GitHub Pages (user.github.io/repo/) this builds the link to the latest release automatically.
+var host=location.hostname, parts=location.pathname.split('/').filter(Boolean);
+if(host.endsWith('.github.io')&&parts.length){
+  document.getElementById('dl').href='https://github.com/'+host.split('.')[0]+'/'+parts[0]+'/releases/latest/download/FishEvolution-OceanRun.apk';
+}else{document.getElementById('dl').onclick=function(e){e.preventDefault();alert('Edit docs/index.html and put your APK link in the href.');};}
+</script></body></html>
