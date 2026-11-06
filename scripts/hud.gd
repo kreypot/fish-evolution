@@ -10,6 +10,7 @@ signal menu_requested
 signal next_requested
 signal tutorial_closed
 signal shop_requested
+signal continue_requested   # "Continue from checkpoint" on the lose screen
 signal back_requested   # Android back button or Esc
 signal app_paused       # app lost focus / went to background
 
@@ -26,6 +27,7 @@ var _level_label: Label
 var _progress: ProgressBar
 var _banner: Label
 var _overlay: Control = null
+var _flash: ColorRect
 var _last_size := -1
 var _last_score := -1
 
@@ -41,6 +43,12 @@ func _ready() -> void:
 
 	joystick = Joystick.new()
 	_root.add_child(joystick)
+
+	_flash = ColorRect.new()
+	_flash.color = Color(1, 1, 1, 0)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_flash)
+	_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	# --- top bar ---
 	var bar := MarginContainer.new()
@@ -128,6 +136,10 @@ func _emit_next() -> void:
 	next_requested.emit()
 
 
+func _emit_continue() -> void:
+	continue_requested.emit()
+
+
 func _emit_shop() -> void:
 	shop_requested.emit()
 
@@ -171,6 +183,13 @@ func update_stats(size_value: float, score: int, progress: float, coins: int = 0
 		_score_label.text = "Score %d" % score
 	_coin_label.text = "Coins %d" % coins
 	_progress.value = progress * 100.0
+
+
+## A quick full-screen colour flash that fades out (red when eaten, green when you evolve, ...).
+func flash(color: Color, alpha: float, seconds: float) -> void:
+	_flash.color = Color(color.r, color.g, color.b, alpha)
+	var tw := create_tween()
+	tw.tween_property(_flash, "color:a", 0.0, seconds)
 
 
 func show_banner(text: String) -> void:
@@ -232,6 +251,7 @@ func show_tutorial() -> void:
 		"GREEN ring = you can eat it. RED ring = it can eat you!",
 		"Eating makes you grow and evolve, so you can eat bigger fish later.",
 		"Avoid jellyfish and reach the chequered FINISH wall on the right.",
+		"Flags save your progress: if you get eaten after a flag, you can continue from it.",
 	], [["Let's swim!", _emit_tutorial]])
 
 
@@ -245,7 +265,7 @@ func show_win(d: Dictionary) -> void:
 	var buttons: Array = []
 	var title := "Level Complete!"
 	if d["is_last"]:
-		title = "You beat all 100 levels!"
+		title = "You beat all %d levels!" % GameState.TOTAL_LEVELS
 	else:
 		buttons.append(["Next Level", _emit_next])
 	buttons.append(["Replay", _emit_restart])
@@ -255,10 +275,13 @@ func show_win(d: Dictionary) -> void:
 
 
 func show_lose(d: Dictionary) -> void:
-	_show_overlay("You were eaten!", Color("#ff7a6a"), [
-		"Score: %d" % d["score"],
-		"Coins you collected are kept. Watch for the red rings!",
-	], [
-		["Retry", _emit_restart],
-		["Main Menu", _emit_menu],
-	])
+	var buttons: Array = []
+	var lines: Array = ["Score: %d" % d["score"]]
+	if d.get("can_continue", false):
+		buttons.append(["Continue from checkpoint (%d left)" % int(d["continues"]), _emit_continue])
+		lines.append("You reached a flag, so you can keep going!")
+	else:
+		lines.append("Coins you collected are kept. Watch for the red rings!")
+	buttons.append(["Retry level", _emit_restart])
+	buttons.append(["Main Menu", _emit_menu])
+	_show_overlay("You were eaten!", Color("#ff7a6a"), lines, buttons)

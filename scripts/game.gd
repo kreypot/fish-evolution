@@ -15,6 +15,7 @@ const DecorChunk = preload("res://scripts/decor_chunk.gd")
 const Gate = preload("res://scripts/finish_gate.gd")
 const Fx = preload("res://scripts/fx.gd")
 const Coin = preload("res://scripts/coin.gd")
+const Flag = preload("res://scripts/checkpoint_flag.gd")
 
 enum S { TUTORIAL, PLAYING, PAUSED, WON, LOST }
 
@@ -37,11 +38,13 @@ var jelly_list: Array = []
 var chunks: Array = []
 var coin_list: Array = []
 var rocks: Array = []       # Vector3(x, y, radius)
+var flags: Array = []       # the 3 checkpoint flags
 
 var score := 0
 var eaten := 0
 var stings := 0
 var coins_run := 0
+var god_mode := false   # debug only: predators cannot eat the player (used by the screenshot tool)
 var elapsed := 0.0
 var rng := RandomNumberGenerator.new()
 
@@ -50,7 +53,15 @@ var _activate_timer := 0.0
 var _swim_timer := 0.0
 var _bubble_timer := 0.0
 var _trail_timer := 0.0
-var _end_delay := 0.0
+var _end_delay := 0.0          # REAL seconds until the win/lose screen (not affected by slow motion)
+var _slowmo := 0.0             # REAL seconds of slow motion left after being eaten
+var _shake := 0.0              # screen-shake strength in pixels
+var _combo := 0
+var _combo_timer := 0.0
+var _cp_reached := -1          # index of the last checkpoint passed (-1 = none)
+var _cp_pos := Vector2.ZERO
+var _cp_size := 20.0
+var _continues_left := 3
 var _stats: Dictionary = {}
 
 
@@ -61,6 +72,9 @@ func _ready() -> void:
 	world_rect = Rect2(0.0, 40.0, length + 300.0, 900.0)
 	rng.seed = 7919 * level + 13    # same level = same layout every retry
 	get_tree().paused = false
+	Engine.time_scale = 1.0
+	_continues_left = GameState.CONTINUES_PER_ATTEMPT
+	_cp_size = GameState.PLAYER_START_SIZE
 	_build_world()
 	_build_player_and_camera()
 	_spawn_creatures()
@@ -76,6 +90,7 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	Engine.time_scale = 1.0   # never leave the game in slow motion
 	get_tree().paused = false
 
 
@@ -106,6 +121,14 @@ func _build_world() -> void:
 	gate.position = Vector2(length, 0.0)
 	gate.z_index = -4
 	add_child(gate)
+
+	for frac in GameState.CHECKPOINT_FRACTIONS:   # checkpoint flags at 25 %, 50 %, 75 %
+		var flag := Flag.new()
+		var flag_x: float = length * float(frac)
+		flag.position = Vector2(flag_x, DecorChunk.floor_y(flag_x) + 4.0)
+		flag.z_index = -3
+		add_child(flag)
+		flags.append(flag)
 
 
 func _generate_rocks() -> Array:
@@ -221,6 +244,8 @@ func _spawn_fish(tier: int) -> void:
 			f.chase_speed = pred_speed
 			f.detect_range = detect
 	f.flee_range = 260.0 + f.size_val * 3.0
+	f.chase_limit = float(cfg["chase_time"])
+	f.rest_len = float(cfg["rest_time"])
 	if tier > 0 and rng.randf() < float(cfg["patrol_share"]):
 		f.patroller = true
 		var reach := rng.randf_range(150.0, 350.0)
@@ -243,6 +268,7 @@ func _build_hud() -> void:
 	hud.tutorial_closed.connect(_on_tutorial_closed)
 	hud.back_requested.connect(_on_back)
 	hud.shop_requested.connect(_go_shop)
+	hud.continue_requested.connect(_continue_from_checkpoint)
 	hud.app_paused.connect(_pause)
 
 
@@ -261,10 +287,16 @@ func _process(delta: float) -> void:
 		_activate_timer = 0.25
 		_update_activation()
 	_ambient_bubbles(delta)
+	_combo_timer = maxf(_combo_timer - delta, 0.0)
 
 	if state == S.LOST or state == S.WON:
+		var real_dt: float = delta / maxf(Engine.time_scale, 0.05)   # slow motion must not slow the timers below
+		if _slowmo > 0.0:
+			_slowmo -= real_dt
+			if _slowmo <= 0.0:
+				Engine.time_scale = 1.0
 		if _end_delay > 0.0:
-			_end_delay -= delta
+			_end_delay -= real_dt
 			if _end_delay <= 0.0:
 				_show_end_screen()
 		return
@@ -282,6 +314,7 @@ func _process(delta: float) -> void:
 	_check_jellyfish()
 	_check_coins()
 	_check_fish()
+	_check_checkpoints()
 	if state == S.PLAYING and player.position.x >= length:
 		_win()
 	hud.update_stats(player.size_val, score, clampf(player.position.x / length, 0.0, 1.0), GameState.coins)
@@ -302,7 +335,11 @@ func _read_input() -> void:
 func _update_camera(delta: float) -> void:
 	camera.position = player.position + Vector2(160.0, 0.0)
 	var z: float = lerpf(1.0, 0.8, clampf((player.size_val - 20.0) / 80.0, 0.0, 1.0))
+	if state == S.LOST:
+		z *= 1.2   # zoom in on the moment you are eaten
 	camera.zoom = camera.zoom.lerp(Vector2(z, z), clampf(delta * 2.0, 0.0, 1.0))
+	camera.offset = Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake   # screen shake
+	_shake = move_toward(_shake, 0.0, delta * 45.0)
 
 
 func _ambient_bubbles(delta: float) -> void:
@@ -356,6 +393,8 @@ func _check_fish() -> void:
 		if f.relation == 1:
 			_eat(f, i)
 		elif f.relation == 2:
+			if god_mode or player.invuln > 0.0:   # invulnerable right after a checkpoint continue
+				continue
 			_lose(f)
 			return
 		else:   # similar size: they just bump into each other
@@ -365,22 +404,41 @@ func _check_fish() -> void:
 
 
 func _eat(f: Fish, idx: int) -> void:
+	# Combo: eating several fish within 1.6 seconds builds a combo with bonus points
+	_combo = _combo + 1 if _combo_timer > 0.0 else 1
+	_combo_timer = 1.6
 	var pts := int(round(f.size_val * 2.0))
-	score += pts
+	var combo_bonus := (_combo - 1) * 5
+	score += pts + combo_bonus
 	eaten += 1
 	var tier_before := int(player.size_val / 10.0)
 	var stage_before: int = player.get_stage()
 	player.eat_fish(f.size_val)
-	fx.burst(f.position, f.body_color, 12)
-	fx.popup(f.position + Vector2(0.0, -f.size_val), "+%d" % pts, Color(1.0, 0.95, 0.4))
-	AudioManager.play_sfx("eat")
-	if player.get_stage() != stage_before:
+
+	# Animation: the fish spins into your mouth (gulp), a shock-wave ring, sparkles, particles and a small screen kick.
+	f.swallow()
+	var big: float = clampf(f.size_val / maxf(player.size_val, 1.0), 0.0, 1.0)   # bigger prey = bigger effect
+	var mouth_pos: Vector2 = player.position + Vector2(player.facing * player.shown_size * 0.9, 0.0)
+	fx.burst(f.position, f.body_color, 10 + int(10.0 * big))
+	fx.ring(mouth_pos, player.shown_size * 0.5, player.shown_size * (1.6 + big), f.body_color.lightened(0.3))
+	fx.sparkles(mouth_pos, Color(1.0, 0.95, 0.5), 4 + int(6.0 * big))
+	fx.popup(f.position + Vector2(0.0, -f.size_val - 10.0), "+%d" % pts, Color(1.0, 0.95, 0.4), 28 + int(10.0 * big))
+	if _combo >= 2:
+		var combo_col := Color(1.0, 0.65, 0.2).lerp(Color(1.0, 0.3, 0.5), clampf(float(_combo) / 8.0, 0.0, 1.0))
+		fx.popup(player.position + Vector2(0.0, -player.shown_size - 60.0), "COMBO x%d  +%d" % [_combo, combo_bonus], combo_col, 30 + mini(_combo, 8) * 2)
+	_shake = maxf(_shake, 2.0 + 7.0 * big)
+	AudioManager.play_sfx("eat", 0.0, minf(1.0 + 0.08 * float(_combo - 1), 1.8))   # pitch rises with the combo
+
+	if player.get_stage() != stage_before:   # evolved into a new form
 		AudioManager.play_sfx("grow")
-		fx.popup(player.position + Vector2(0.0, -70.0), "EVOLVED!", Color(0.5, 1.0, 0.6))
+		fx.popup(player.position + Vector2(0.0, -90.0), "EVOLVED!", Color(0.5, 1.0, 0.6), 40)
+		fx.ring(player.position, player.shown_size, player.shown_size * 4.0, Color(0.5, 1.0, 0.6), 0.7)
+		fx.sparkles(player.position, Color(0.6, 1.0, 0.7), 14, 320.0)
+		hud.flash(Color(0.6, 1.0, 0.7), 0.25, 0.5)
+		_shake = maxf(_shake, 10.0)
 	elif int(player.size_val / 10.0) != tier_before:
 		AudioManager.play_sfx("grow", -4.0)
-	fish_list.remove_at(idx)
-	f.queue_free()
+	fish_list.remove_at(idx)   # (the fish frees itself when its gulp animation ends)
 
 
 func _check_coins() -> void:
@@ -403,6 +461,8 @@ func _check_rocks() -> void:
 	var pr: float = player.body_radius()
 	for r in rocks:
 		var rv: Vector3 = r
+		if absf(rv.x - player.position.x) > 500.0:   # levels are long now: skip far-away rocks quickly
+			continue
 		var center := Vector2(rv.x, rv.y)
 		var offset: Vector2 = player.position - center
 		var min_d: float = rv.z + pr * 0.8
@@ -429,6 +489,9 @@ func _check_jellyfish() -> void:
 			AudioManager.play_sfx("hurt")
 			fx.burst(player.position, Color(0.9, 0.5, 1.0), 10)
 			fx.popup(player.position + Vector2(0.0, -60.0), "Ouch!", Color(1.0, 0.6, 1.0))
+			fx.ring(player.position, 10.0, 90.0, Color(0.9, 0.5, 1.0), 0.4)
+			_shake = maxf(_shake, 7.0)
+			hud.flash(Color(0.9, 0.5, 1.0), 0.22, 0.3)
 			return
 
 
@@ -436,13 +499,72 @@ func _lose(killer: Fish) -> void:
 	if state != S.PLAYING:
 		return
 	state = S.LOST
+	_combo = 0
 	player.dead = true
-	killer.mouth = 1.0
+	killer.chomp()   # the predator lunges with its mouth wide open
 	hud.joystick.reset()
-	fx.burst(player.position, Color(1.0, 0.6, 0.2), 18, 220.0)
+	var p: Vector2 = player.position
+	fx.burst(p, Color(1.0, 0.6, 0.2), 28, 300.0)
+	fx.burst(p, Color(1.0, 0.9, 0.5), 14, 180.0)
+	fx.ring(p, 10.0, 170.0, Color(1.0, 0.45, 0.3), 0.6)
+	fx.ring(p, 5.0, 100.0, Color(1.0, 0.9, 0.5), 0.4)
+	fx.sparkles(p, Color(1.0, 0.85, 0.4), 10, 300.0)
+	for i in 10:
+		fx.bubble(p + Vector2(randf_range(-40.0, 40.0), randf_range(-30.0, 30.0)), randf_range(4.0, 10.0))
+	fx.popup(p + Vector2(0.0, -80.0), "GULP!", Color(1.0, 0.4, 0.3), 40)
+	_shake = 18.0
+	hud.flash(Color(1.0, 0.1, 0.1), 0.45, 0.7)
+	Engine.time_scale = 0.35   # slow motion at the moment you are eaten
+	_slowmo = 0.7              # (real seconds)
+	AudioManager.play_sfx("chomp")
 	AudioManager.play_sfx("lose")
-	GameState.save_game()   # keep the coins you collected
-	_end_delay = 1.0
+	GameState.save_game()      # keep the coins you collected
+	_end_delay = 1.6           # (real seconds) until the "You were eaten" screen
+
+
+## Flags at 25 / 50 / 75 %: reaching one saves your position and size.
+func _check_checkpoints() -> void:
+	var next := _cp_reached + 1
+	if next >= GameState.CHECKPOINT_FRACTIONS.size():
+		return
+	var frac: float = GameState.CHECKPOINT_FRACTIONS[next]
+	if player.position.x < length * frac:
+		return
+	_cp_reached = next
+	_cp_pos = player.position
+	_cp_size = player.size_val
+	var flag = flags[next]
+	flag.reached = true
+	fx.ring(player.position, 10.0, 150.0, Color(0.5, 1.0, 0.6), 0.6)
+	fx.sparkles(player.position, Color(0.6, 1.0, 0.7), 10, 260.0)
+	fx.popup(player.position + Vector2(0.0, -100.0), "CHECKPOINT!", Color(0.5, 1.0, 0.6), 36)
+	hud.show_banner("Checkpoint saved!")
+	AudioManager.play_sfx("grow")
+
+
+## "Continue from checkpoint" button on the lose screen (limited number of continues per attempt).
+func _continue_from_checkpoint() -> void:
+	if state != S.LOST or _cp_reached < 0 or _continues_left <= 0:
+		return
+	_continues_left -= 1
+	Engine.time_scale = 1.0
+	_slowmo = 0.0
+	hud.clear_overlay()
+	var back := Vector2(maxf(_cp_pos.x - 120.0, 140.0), clampf(_cp_pos.y, 120.0, 800.0))
+	player.revive(back, _cp_size)
+	camera.position = player.position + Vector2(160.0, 0.0)
+	camera.reset_smoothing()
+	for f in fish_list:   # clear predators out of the revive area
+		var ff: Fish = f
+		if ff.relation == 2 and ff.position.distance_to(back) < 550.0:
+			ff.position.x = minf(ff.position.x + 900.0, length - 200.0)
+			ff.calm(3.0)
+	_update_activation()
+	state = S.PLAYING
+	hud.show_banner("Continue!   %d left" % _continues_left)
+	fx.ring(back, 10.0, 160.0, Color(0.5, 1.0, 0.6), 0.6)
+	fx.sparkles(back, Color(0.6, 1.0, 0.7), 12, 280.0)
+	AudioManager.play_sfx("grow")
 
 
 func _win() -> void:
@@ -451,7 +573,8 @@ func _win() -> void:
 	hud.joystick.reset()
 	var old_best := int(GameState.best_scores.get(level, 0))
 	score += 500 + level * 20                       # finish bonus
-	score += maxi(0, int(300.0 - elapsed)) * 2      # speed bonus
+	var par_time: float = length / 200.0             # a calm pace; finish faster than this for a speed bonus
+	score += maxi(0, int(par_time - elapsed)) * 4
 	var bonus_coins := 10 + floori(level / 2.0)
 	GameState.add_coins(bonus_coins)
 	GameState.complete_level(level, score)   # also saves coins
@@ -470,6 +593,9 @@ func _win() -> void:
 	}
 	hud.update_stats(player.size_val, score, 1.0, GameState.coins)
 	fx.burst(player.position + Vector2(100.0, 0.0), Color(1.0, 0.9, 0.3), 30, 300.0)
+	fx.ring(player.position, 20.0, 260.0, Color(1.0, 0.9, 0.3), 0.8)
+	fx.sparkles(player.position, Color(1.0, 0.95, 0.5), 16, 380.0)
+	hud.flash(Color(1.0, 0.95, 0.5), 0.35, 0.8)
 	AudioManager.play_sfx("win")
 	_end_delay = 1.4
 
@@ -478,7 +604,7 @@ func _show_end_screen() -> void:
 	if state == S.WON:
 		hud.show_win(_stats)
 	elif state == S.LOST:
-		hud.show_lose({"score": score})
+		hud.show_lose({"score": score, "can_continue": _cp_reached >= 0 and _continues_left > 0, "continues": _continues_left})
 
 
 # --- Pause / navigation ------------------------------------------------------

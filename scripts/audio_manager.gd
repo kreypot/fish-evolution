@@ -31,13 +31,14 @@ func _ready() -> void:
 	_apply_music_state()
 
 
-func play_sfx(sfx_name: String, volume_db: float = 0.0) -> void:
+func play_sfx(sfx_name: String, volume_db: float = 0.0, pitch: float = 1.0) -> void:
 	if not GameState.sfx_on or not _sfx.has(sfx_name):
 		return
 	var p: AudioStreamPlayer = _players[_next]
 	_next = (_next + 1) % _players.size()
 	p.stream = _sfx[sfx_name]
 	p.volume_db = volume_db
+	p.pitch_scale = pitch   # higher pitch = used for combo eating
 	p.play()
 
 
@@ -71,6 +72,7 @@ func _apply_music_state() -> void:
 func _build_sfx() -> void:
 	_sfx["click"] = _wav(_tone(700.0, 900.0, 0.06, 0.35))
 	_sfx["coin"] = _wav(_seq([987.77, 1318.5], 0.07, 0.35))
+	_sfx["chomp"] = _wav(_chomp())
 	_sfx["swim"] = _wav(_tone(260.0, 170.0, 0.10, 0.25))
 	_sfx["eat"] = _wav(_tone(420.0, 880.0, 0.14, 0.5))
 	_sfx["hurt"] = _wav(_tone(180.0, 90.0, 0.30, 0.5, true))
@@ -93,6 +95,22 @@ func _tone(f0: float, f1: float, dur: float, vol: float, square: bool = false) -
 		if square:
 			s = signf(s) * 0.6 + s * 0.4
 		out[i] = s * vol * env
+	return out
+
+
+## "CRUNCH": a short burst of noise plus a low thump, used when a predator eats you.
+func _chomp() -> PackedFloat32Array:
+	var dur := 0.28
+	var n := int(dur * SFX_RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phase := 0.0
+	for i in n:
+		var t: float = float(i) / float(SFX_RATE)
+		phase += TAU * lerpf(150.0, 55.0, t / dur) / float(SFX_RATE)
+		var env: float = exp(-9.0 * t)
+		var noise: float = (randf() * 2.0 - 1.0) * 0.55 * exp(-22.0 * t)
+		out[i] = (sin(phase) * 0.7 + noise) * env * 0.9
 	return out
 
 

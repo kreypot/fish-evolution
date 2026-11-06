@@ -1,12 +1,23 @@
 extends Node
 ## GameState (autoload)
-## Holds save data, settings and the difficulty table for all 100 levels.
+## Holds save data, settings and the difficulty table for all 300 levels.
 ## Everything that must survive between scenes lives here.
 ## To rebalance the game, change the constants and get_level_config() below.
 
 const SAVE_PATH := "user://fish_evolution_save.cfg"
-const TOTAL_LEVELS := 100
+const TOTAL_LEVELS := 300
 const LEVELS_PER_THEME := 10
+
+# --- Level length (in pixels; the fish swims about 200-300 px per second) ----------------------------
+# Level 1 = 9000 + 110 = ~9100 px (about 45 s).  Level 300 = ~42000 px (about 3 minutes).
+# TO MAKE ALL LEVELS LONGER OR SHORTER, change LEVEL_LENGTH_SCALE (1.0 = normal, 0.5 = half as long, 2.0 = twice as long).
+const LEVEL_LENGTH_BASE := 9000.0
+const LEVEL_LENGTH_PER_LEVEL := 110.0
+const LEVEL_LENGTH_SCALE := 1.0
+
+# --- Checkpoints: flags at 25 %, 50 % and 75 % of every level ---------------------------------------
+const CHECKPOINT_FRACTIONS := [0.25, 0.5, 0.75]
+const CONTINUES_PER_ATTEMPT := 3   # how many times you may "Continue from checkpoint" before you must retry the level
 
 # --- Size / growth rules ---------------------------------------------------
 const PLAYER_START_SIZE := 20.0
@@ -17,7 +28,7 @@ const DANGER_RATIO := 1.15  # fish bigger than (your size * 1.15) can eat you
 const GROW_FACTOR := 0.25   # you gain this fraction of an eaten fish's size (big, visible growth)
 
 # --- Coins -------------------------------------------------------------------
-const COIN_GROUPS_PER_KM := 2.2   # groups of 5 coins per 1000 px of level
+const COIN_GROUPS_PER_KM := 1.0   # groups of 5 coins per 1000 px of level (levels are long now, so fewer per km)
 
 var unlocked_level: int = 1
 var current_level: int = 1
@@ -76,37 +87,70 @@ var themes: Array = [
 ]
 
 
+var _themes_extended := false
+
+
 func _ready() -> void:
+	_ensure_themes()
 	load_game()
 
 
 ## Returns the visual theme dictionary for a level (10 levels per theme).
 func get_theme_for_level(level: int) -> Dictionary:
+	_ensure_themes()
 	var idx: int = clampi(floori((level - 1) / float(LEVELS_PER_THEME)), 0, themes.size() - 1)
 	return themes[idx]
 
 
-## Difficulty table. Level 1 is gentle, level 100 is brutal but still fair:
-## predators are always slower than the player and get tired after a while.
+## Worlds 11-30 are colour variations of the first 10 with new names, so there are 30 different worlds for 300 levels.
+func _ensure_themes() -> void:
+	if _themes_extended:
+		return
+	_themes_extended = true
+	var names: Array = [
+		"Tropical Lagoon", "Pearl Bay", "Mangrove Maze", "Whale Highway", "Pirate Cove",
+		"Aurora Deep", "Lava Tubes", "Frozen Reef", "Crystal Caverns", "Abyssal Void",
+		"Golden Sands", "Rainbow Reef", "Mushroom Forest", "Storm Surge", "Atlantis Ruins",
+		"Moonlit Depths", "Magma Core", "Glacier Gate", "Glowing Bay", "The Final Trench",
+	]
+	for k in 20:
+		var base: Dictionary = themes[k % 10]
+		var shift: float = 0.17 if k < 10 else 0.43
+		var v_mul: float = 1.0 if k < 10 else 0.92
+		var t: Dictionary = {"name": names[k], "pred_hue": fposmod(float(base["pred_hue"]) + shift, 1.0)}
+		for key in ["top", "bottom", "sand", "plant", "coral", "rock"]:
+			var c: Color = base[key]
+			t[key] = Color.from_hsv(fposmod(c.h + shift, 1.0), clampf(c.s * 1.05, 0.0, 1.0), clampf(c.v * v_mul, 0.0, 1.0))
+		themes.append(t)
+
+
+## Difficulty table for all 300 levels.
+##  * Levels 1-100 use the original curve (t goes 0 -> 1).
+##  * Levels 101-300 start from the level-100 difficulty and keep getting harder (u goes 0 -> 1) WITHOUT breaking
+##    the fairness rules: predators stay slower than the player and still get tired.
 func get_level_config(level: int) -> Dictionary:
 	var n: int = clampi(level, 1, TOTAL_LEVELS)
-	var t: float = float(n - 1) / float(TOTAL_LEVELS - 1)   # 0.0 .. 1.0
+	var t: float = clampf(float(n - 1) / 99.0, 0.0, 1.0)
+	var u: float = clampf(float(n - 100) / 200.0, 0.0, 1.0)
 	return {
 		"level": n,
 		"t": t,
+		"u": u,
 		"theme": get_theme_for_level(n),
-		"length": 3600.0 + n * 75.0,             # level length in pixels
-		"small_density": 8.0,                    # edible fish per 1000 px
-		"medium_density": 2.5 + 3.5 * t,         # mixed-size fish per 1000 px
-		"big_density": 0.8 + 2.7 * t,            # predators per 1000 px
-		"predator_speed": 125.0 + 75.0 * t,      # player is 200-300, so always faster
-		"detect_range": 330.0 + 200.0 * t,
-		"patrol_share": 0.3 + 0.4 * t,
-		"big_min": 40.0 + 10.0 * t,
-		"big_max": 70.0 + 40.0 * t,
-		"jelly_density": 0.0 if n < 5 else 0.6 + 2.4 * t,
-		"rock_density": 1.5 + 1.5 * t,
-		"rock_max": 55.0 + 95.0 * t,
+		"length": (LEVEL_LENGTH_BASE + float(n) * LEVEL_LENGTH_PER_LEVEL) * LEVEL_LENGTH_SCALE,
+		"small_density": 8.0,                          # edible fish per 1000 px
+		"medium_density": 2.5 + 3.5 * t + 2.0 * u,     # mixed-size fish per 1000 px
+		"big_density": 0.8 + 2.7 * t + 2.0 * u,        # predators per 1000 px
+		"predator_speed": 125.0 + 75.0 * t,            # never above 200: the player is always faster
+		"detect_range": 330.0 + 200.0 * t + 150.0 * u,
+		"patrol_share": 0.3 + 0.4 * t + 0.2 * u,
+		"big_min": 40.0 + 10.0 * t + 4.0 * u,
+		"big_max": 70.0 + 40.0 * t + 8.0 * u,          # never above MAX_SIZE (120)
+		"jelly_density": 0.0 if n < 5 else 0.6 + 2.4 * t + 3.0 * u,
+		"rock_density": 1.5 + 1.5 * t + 1.0 * u,
+		"rock_max": 55.0 + 95.0 * t + 25.0 * u,
+		"chase_time": 5.0 + 3.0 * u,                   # seconds a predator keeps chasing...
+		"rest_time": 2.5 - 1.3 * u,                    # ...and how long it rests afterwards
 	}
 
 

@@ -17,20 +17,23 @@ func check(cond: bool, msg: String) -> void:
 func _init() -> void:
 	var gs = load("res://scripts/game_state.gd").new()
 
-	check(gs.TOTAL_LEVELS == 100, "game has exactly 100 levels")
-	check(gs.themes.size() == 10, "10 themes (one per 10 levels)")
+	gs._ensure_themes()
+	check(gs.TOTAL_LEVELS == 300, "game has exactly 300 levels")
+	check(gs.themes.size() == 30, "30 worlds (one per 10 levels)")
 	check(gs.get_theme_for_level(1)["name"] == gs.themes[0]["name"], "level 1 uses theme 1")
 	check(gs.get_theme_for_level(10)["name"] == gs.themes[0]["name"], "level 10 uses theme 1")
 	check(gs.get_theme_for_level(11)["name"] == gs.themes[1]["name"], "level 11 uses theme 2")
 	check(gs.get_theme_for_level(100)["name"] == gs.themes[9]["name"], "level 100 uses theme 10")
+	check(gs.get_theme_for_level(101)["name"] == gs.themes[10]["name"], "level 101 starts world 11")
+	check(gs.get_theme_for_level(300)["name"] == gs.themes[29]["name"], "level 300 uses world 30")
 
 	var ok_monotonic := true
 	var ok_speed := true
 	var ok_fields := true
 	var prev: Dictionary = gs.get_level_config(1)
-	for n in range(1, 101):
+	for n in range(1, 301):
 		var c: Dictionary = gs.get_level_config(n)
-		for key in ["length", "big_density", "predator_speed", "detect_range", "big_min", "big_max", "rock_density", "small_density", "medium_density", "patrol_share", "jelly_density", "rock_max", "theme"]:
+		for key in ["chase_time", "rest_time", "u", "length", "big_density", "predator_speed", "detect_range", "big_min", "big_max", "rock_density", "small_density", "medium_density", "patrol_share", "jelly_density", "rock_max", "theme"]:
 			if not c.has(key):
 				ok_fields = false
 		if n > 1:
@@ -48,8 +51,21 @@ func _init() -> void:
 	check(16.0 < gs.PLAYER_START_SIZE * gs.EAT_RATIO, "level-1 small fish (max size 16) are edible at start size")
 	check(c1["big_min"] > gs.PLAYER_START_SIZE * gs.DANGER_RATIO, "level-1 predators are dangerous at start size")
 	check(c1["jelly_density"] == 0.0, "no jellyfish on level 1")
-	check(gs.get_level_config(100)["big_max"] <= gs.MAX_SIZE, "biggest predator fits within MAX_SIZE")
-	check(gs.get_level_config(1000)["level"] == 100, "level index is clamped to 100")
+	var ok_size := true
+	var ok_rest := true
+	for n in range(1, 301):
+		var c2: Dictionary = gs.get_level_config(n)
+		if c2["big_max"] > gs.MAX_SIZE or c2["big_min"] >= c2["big_max"]:
+			ok_size = false
+		if c2["rest_time"] < 1.0 or c2["chase_time"] < 5.0:
+			ok_rest = false
+	check(ok_size, "predator sizes stay within MAX_SIZE on all 300 levels")
+	check(ok_rest, "predators always get tired (rest >= 1 s) on all 300 levels")
+	check(gs.get_level_config(1)["length"] >= 8000.0, "level 1 is long enough (8000+ px, about 40 s)")
+	check(gs.get_level_config(300)["length"] <= 60000.0, "level 300 is not endless")
+	check(gs.get_level_config(1000)["level"] == 300, "level index is clamped to 300")
+	var cps: Array = gs.CHECKPOINT_FRACTIONS
+	check(cps.size() == 3 and cps[0] < cps[1] and cps[1] < cps[2] and cps[2] < 1.0, "3 checkpoints in increasing order before the finish")
 
 	# --- growth ---
 	check(gs.GROW_FACTOR >= 0.2, "growth per fish is big enough to be clearly visible")

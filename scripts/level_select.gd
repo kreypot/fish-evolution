@@ -12,6 +12,8 @@ var _world: Label
 var _grid: GridContainer
 var _prev: Button
 var _next: Button
+var _prev5: Button
+var _next5: Button
 
 
 func _ready() -> void:
@@ -40,11 +42,15 @@ func _ready() -> void:
 	var nav := HBoxContainer.new()
 	nav.alignment = BoxContainer.ALIGNMENT_CENTER
 	nav.add_theme_constant_override("separation", 18)
-	_prev = UITheme.button("< Prev", _on_prev, 200.0, 70.0)
-	_next = UITheme.button("Next >", _on_next, 200.0, 70.0)
+	_prev5 = UITheme.button("<<", _on_prev5, 110.0, 70.0)
+	_prev = UITheme.button("< Prev", _on_prev, 170.0, 70.0)
+	_next = UITheme.button("Next >", _on_next, 170.0, 70.0)
+	_next5 = UITheme.button(">>", _on_next5, 110.0, 70.0)
+	nav.add_child(_prev5)
 	nav.add_child(_prev)
-	nav.add_child(UITheme.button("Back", _on_back, 240.0, 70.0))
+	nav.add_child(UITheme.button("Back", _on_back, 200.0, 70.0))
 	nav.add_child(_next)
+	nav.add_child(_next5)
 	vb.add_child(nav)
 	_refresh()
 
@@ -55,7 +61,7 @@ func _refresh() -> void:
 	var first := _page * PER_PAGE + 1
 	var info := GameState.get_theme_for_level(first)
 	_title.text = "Levels %d - %d" % [first, first + PER_PAGE - 1]
-	_world.text = "World %d: %s" % [_page + 1, info["name"]]
+	_world.text = "World %d of %d: %s" % [_page + 1, floori(GameState.TOTAL_LEVELS / float(PER_PAGE)), info["name"]]
 	for i in PER_PAGE:
 		var n := first + i
 		var unlocked := n <= GameState.unlocked_level
@@ -70,6 +76,8 @@ func _refresh() -> void:
 		_grid.add_child(b)
 	_prev.disabled = _page <= 0
 	_next.disabled = (_page + 1) * PER_PAGE >= GameState.TOTAL_LEVELS
+	_prev5.disabled = _page <= 0
+	_next5.disabled = (_page + 1) * PER_PAGE >= GameState.TOTAL_LEVELS
 
 
 func _on_level(n: int) -> void:
@@ -79,6 +87,16 @@ func _on_level(n: int) -> void:
 
 func _on_prev() -> void:
 	_page = maxi(_page - 1, 0)
+	_refresh()
+
+
+func _on_prev5() -> void:
+	_page = maxi(_page - 5, 0)
+	_refresh()
+
+
+func _on_next5() -> void:
+	_page = mini(_page + 5, floori(GameState.TOTAL_LEVELS / float(PER_PAGE)) - 1)
 	_refresh()
 
 

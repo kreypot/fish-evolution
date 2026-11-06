@@ -4,10 +4,13 @@ extends Control
 
 const UITheme = preload("res://scripts/ui_theme.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
+const ScrollMenu = preload("res://scripts/scroll_menu.gd")
 
 var _menu_box: Control
 var _settings_panel: Control
 var _about_panel: Control
+var _help_panel: Control
+var _hint_label: Label
 var _music_btn: Button
 var _sfx_btn: Button
 var _reset_btn: Button
@@ -20,6 +23,7 @@ func _ready() -> void:
 	_build_main()
 	_build_settings()
 	_build_about()
+	_build_help()
 	AudioManager.start_music()
 
 
@@ -32,29 +36,67 @@ func _centered(content: Control) -> Control:
 
 
 func _build_main() -> void:
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 14)
+	# Left: logo. Right: a list of options that you can scroll up and down with your finger.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 40)
+
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 12)
+	left.custom_minimum_size = Vector2(560, 0)
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
 	var title := UITheme.label("Fish Evolution", 84, Color("#ffd23a"))
 	title.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	title.add_theme_constant_override("outline_size", 14)
 	var sub := UITheme.label("Ocean Run", 48, Color.WHITE)
 	sub.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	sub.add_theme_constant_override("outline_size", 10)
-	vb.add_child(title)
-	vb.add_child(sub)
-	var coins_label := UITheme.label("Coins: %d" % GameState.coins, 30, Color("#ffd23a"))
+	var coins_label := UITheme.label("Coins: %d" % GameState.coins, 32, Color("#ffd23a"))
 	coins_label.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	coins_label.add_theme_constant_override("outline_size", 8)
-	vb.add_child(coins_label)
-	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 14)
-	vb.add_child(gap)
+	_hint_label = UITheme.label("Swipe the list up and down  >", 26, Color(1, 1, 1, 0.85))
+	left.add_child(title)
+	left.add_child(sub)
+	left.add_child(coins_label)
+	left.add_child(_hint_label)
+	row.add_child(left)
+
+	var list := ScrollMenu.new()
+	list.custom_minimum_size = Vector2(480, 470)
+	list.scrolled_first_time.connect(_on_first_scroll)
 	var play_text := "Play" if GameState.unlocked_level == 1 else "Continue (Level %d)" % GameState.unlocked_level
-	for item in [[play_text, _on_play], ["Level Selection", _on_levels], ["Fish Shop", _on_shop], ["Settings", _on_settings], ["About", _on_about]]:
-		var b := UITheme.button(str(item[0]), item[1], 420.0, 76.0)
-		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		vb.add_child(b)
-	_menu_box = _centered(vb)
+	list.add_item(play_text, _on_play)
+	list.add_item("Level Selection", _on_levels)
+	list.add_item("Fish Shop", _on_shop)
+	list.add_item("How to Play", _on_help)
+	list.add_item("Settings", _on_settings)
+	list.add_item("About", _on_about)
+	list.add_item("Exit Game", _on_quit)
+	row.add_child(list)
+	_menu_box = _centered(row)
+
+
+func _on_first_scroll() -> void:
+	if _hint_label != null:
+		var tw := create_tween()
+		tw.tween_property(_hint_label, "modulate:a", 0.0, 0.6)   # the hint fades once you have scrolled
+
+
+func _build_help() -> void:
+	var panel := PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	panel.add_child(vb)
+	vb.add_child(UITheme.label("How to Play", 52, Color("#ffd23a")))
+	var text := "Touch and drag anywhere to swim - the joystick appears under your thumb.\n\nGREEN ring = you can eat it. RED ring = it can eat you!\n\nEat fish to grow and evolve. Eat several quickly for a COMBO bonus.\n\nCollect coins and spend them in the Fish Shop.\n\nAvoid jellyfish and reach the chequered FINISH wall. Flags save your progress: if you get eaten after a flag you can continue from it."
+	var l := UITheme.label(text, 24)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(760, 0)
+	vb.add_child(l)
+	var back := UITheme.button("Back", _show_menu, 320.0, 70.0)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vb.add_child(back)
+	_help_panel = _centered(panel)
+	_help_panel.visible = false
 
 
 func _build_settings() -> void:
@@ -82,7 +124,7 @@ func _build_about() -> void:
 	vb.add_theme_constant_override("separation", 14)
 	panel.add_child(vb)
 	vb.add_child(UITheme.label("About", 52, Color("#ffd23a")))
-	var text := "Fish Evolution: Ocean Run  v1.0.0\n\nEat smaller fish to grow, dodge bigger predators, avoid jellyfish and reach the finish wall. 100 levels across 10 underwater worlds.\n\nPrivacy: this game collects no information from your device. It has no ads, no analytics, no accounts, needs no internet and asks for no permissions. Your progress is saved only on your phone.\n\nMade with the Godot Engine (MIT licence). All art and sound are generated in code."
+	var text := "Fish Evolution: Ocean Run  v1.1.0\n\nEat smaller fish to grow, dodge bigger predators, avoid jellyfish and reach the finish wall. 300 levels across 30 underwater worlds.\n\nPrivacy: this game collects no information from your device. It has no ads, no analytics, no accounts, needs no internet and asks for no permissions. Your progress is saved only on your phone.\n\nMade with the Godot Engine (MIT licence). All art and sound are generated in code."
 	var l := UITheme.label(text, 24)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(760, 0)
@@ -104,6 +146,7 @@ func _show_menu() -> void:
 	_menu_box.visible = true
 	_settings_panel.visible = false
 	_about_panel.visible = false
+	_help_panel.visible = false
 	_reset_armed = false
 	_refresh_settings()
 
@@ -119,6 +162,15 @@ func _on_levels() -> void:
 
 func _on_shop() -> void:
 	GameState.go_to("res://scenes/shop.tscn")
+
+
+func _on_help() -> void:
+	_menu_box.visible = false
+	_help_panel.visible = true
+
+
+func _on_quit() -> void:
+	get_tree().quit()
 
 
 func _on_settings() -> void:

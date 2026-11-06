@@ -12,6 +12,7 @@ enum State { WANDER, CHASE, FLEE, PATROL }
 
 const MAX_CHASE_TIME := 5.0   # a predator gives up after this many seconds...
 const REST_TIME := 2.5        # ...and rests this long, so you can always escape
+const SWALLOW_TIME := 0.3     # how long the "gulp" animation lasts when you eat this fish
 
 var size_val: float = 12.0
 var kind: int = 0
@@ -26,6 +27,10 @@ var patrol_a := Vector2.ZERO
 var patrol_b := Vector2.ZERO
 var world_rect := Rect2()
 var player = null          # set by game.gd (untyped on purpose: avoids a circular preload)
+var chase_limit := MAX_CHASE_TIME   # game.gd sets these per level (harder levels = longer chases, shorter rests)
+var rest_len := REST_TIME
+var lunge_t := 0.0         # > 0 while this fish lunges at the player it just caught
+var swallow_t := -1.0      # >= 0 while this fish is being eaten (gulp animation)
 
 var state: int = State.WANDER
 var relation: int = 0      # 0 = neutral, 1 = edible, 2 = dangerous (updated every frame)
@@ -57,8 +62,56 @@ func _set_active(v: bool) -> void:
 	visible = v
 
 
+## The player caught us: lunge at them with a wide-open mouth (death animation).
+func chomp() -> void:
+	lunge_t = 0.3
+
+
+## Stop chasing for a while (used after the player continues from a checkpoint).
+func calm(seconds: float) -> void:
+	_rest_time = seconds
+	_chase_time = 0.0
+	lunge_t = 0.0
+
+
+## Start the "gulp" animation: spin, shrink and get sucked into the player's mouth. Frees itself afterwards.
+func swallow() -> void:
+	swallow_t = 0.0
+	active = true
+	set_process(true)
+	visible = true
+
+
+func _swallow_step(delta: float) -> void:
+	swallow_t += delta
+	var mouth_pos: Vector2 = player.position + Vector2(player.facing * player.shown_size * 0.9, 0.0)
+	position += (mouth_pos - position) * clampf(delta * 16.0, 0.0, 1.0)
+	phase += delta * 20.0
+	queue_redraw()
+	if swallow_t >= SWALLOW_TIME:
+		queue_free()
+
+
+func _lunge_step(delta: float) -> void:
+	lunge_t -= delta
+	velocity = (player.position - position).normalized() * 520.0
+	position += velocity * delta
+	if absf(velocity.x) > 10.0:
+		facing = signf(velocity.x)
+	turn = move_toward(turn, facing, delta * 10.0)
+	mouth = 1.0
+	phase += delta * 14.0
+	queue_redraw()
+
+
 func _process(delta: float) -> void:
 	if player == null:
+		return
+	if swallow_t >= 0.0:
+		_swallow_step(delta)
+		return
+	if lunge_t > 0.0:
+		_lunge_step(delta)
 		return
 	phase += delta * (5.0 + velocity.length() * 0.05)
 	_update_state(delta)
@@ -101,9 +154,9 @@ func _update_state(delta: float) -> void:
 		elif _dist < detect_range:
 			state = State.CHASE
 			_chase_time += delta
-			if _chase_time > MAX_CHASE_TIME:
+			if _chase_time > chase_limit:
 				_chase_time = 0.0
-				_rest_time = REST_TIME
+				_rest_time = rest_len
 		else:
 			state = idle_state
 			_chase_time = maxf(_chase_time - delta, 0.0)
@@ -147,9 +200,17 @@ func _pick_wander_target() -> void:
 func _draw() -> void:
 	var t: float = turn if absf(turn) > 0.12 else 0.12 * facing
 	var tilt: float = atan2(velocity.y, maxf(absf(velocity.x), 60.0)) * 0.4 * signf(t)
-	var xf := Transform2D(tilt, Vector2(t, 1.0), 0.0, Vector2.ZERO)
+	var sm := 1.0
+	var spin := 0.0
+	if swallow_t >= 0.0:   # being eaten: spin and shrink to nothing
+		var k: float = clampf(swallow_t / SWALLOW_TIME, 0.0, 1.0)
+		sm = 1.0 - k
+		spin = k * TAU * 1.5 * signf(t)
+		if sm < 0.04:
+			return
+	var xf := Transform2D(tilt + spin, Vector2(t * sm, sm), 0.0, Vector2.ZERO)
 	# Hint ring: green = you can eat it, red = it can eat you
-	if _dist < 700.0:
+	if _dist < 700.0 and swallow_t < 0.0:
 		if relation == 1:
 			draw_arc(Vector2.ZERO, size_val * 1.35, 0.0, TAU, 28, Color(0.3, 1.0, 0.4, 0.55), 3.0)
 		elif relation == 2:

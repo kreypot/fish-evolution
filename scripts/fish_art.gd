@@ -52,7 +52,7 @@ static func _tri(c: CanvasItem, xf: Transform2D, a: Vector2, b: Vector2, d: Vect
 	c.draw_colored_polygon(PackedVector2Array([xf * a, xf * b, xf * d]), col)
 
 
-static func draw_fish(c: CanvasItem, xf: Transform2D, s: float, kind: int, body: Color, belly: Color, fin: Color, wag: float, mouth: float, stage: int, pattern: int = 0, acc: int = 0) -> void:
+static func draw_fish(c: CanvasItem, xf: Transform2D, s: float, kind: int, body: Color, belly: Color, fin: Color, wag: float, mouth: float, stage: int, pattern: int = 0, acc: int = 0, dead: bool = false) -> void:
 	var bx := 1.0
 	var by := 0.62
 	if kind == 1:
@@ -135,8 +135,15 @@ static func draw_fish(c: CanvasItem, xf: Transform2D, s: float, kind: int, body:
 	# --- eye ---
 	var eye := Vector2(0.55 * bx * s, -by * s * 0.35)
 	var er: float = maxf(2.5, 0.2 * s) * rs
-	c.draw_circle(xf * eye, er, Color.WHITE)
-	c.draw_circle(xf * (eye + Vector2(0.06 * s, 0.0)), er * 0.55, Color(0.08, 0.08, 0.12))
+	if dead:   # defeated: cartoon "X" eye
+		var ec: Vector2 = xf * eye
+		var k: float = er * 1.0
+		var xw: float = maxf(2.0, s * 0.07)
+		c.draw_line(ec + Vector2(-k, -k), ec + Vector2(k, k), Color(0.08, 0.08, 0.12), xw)
+		c.draw_line(ec + Vector2(-k, k), ec + Vector2(k, -k), Color(0.08, 0.08, 0.12), xw)
+	else:
+		c.draw_circle(xf * eye, er, Color.WHITE)
+		c.draw_circle(xf * (eye + Vector2(0.06 * s, 0.0)), er * 0.55, Color(0.08, 0.08, 0.12))
 	if kind == 3:   # angry eyebrow
 		c.draw_line(xf * (eye + Vector2(-0.25 * s, -0.3 * s)), xf * (eye + Vector2(0.28 * s, -0.05 * s)), Color(0.1, 0.1, 0.15), maxf(2.0, s * 0.07))
 
