@@ -22,4 +22,4 @@ func _draw() -> void:
 	var cols: Array = FishArt.resolve_colors(look, _t)
 	var tilt: float = sin(_t * 1.2) * 0.08
 	var xf := Transform2D(tilt, Vector2(1.0, 1.0), 0.0, center)
-	FishArt.draw_fish(self, xf, minf(size.x, size.y) * 0.24, 0, cols[0], cols[1], cols[2], sin(_t * 5.0), 0.0, stage, int(look.get("pattern", 0)), int(look.get("acc", 0)))
+	FishArt.draw_fish(self, xf, minf(size.x, size.y) * 0.24, 0, cols[0], cols[1], cols[2], sin(_t * 5.0), 0.0, stage, int(look.get("pattern", 0)), int(look.get("acc", 0)), false, look.get("spec", {}))

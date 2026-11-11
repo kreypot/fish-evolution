@@ -1,137 +1,116 @@
-# Version 1.1 – what changed and what YOU should change
+# Version 1.2 – what changed and what YOU have to do
 
-This update starts from your current game (the version without ads) and adds:
+This update starts from your live version 1.1 (no ads) and adds:
 
-1. **A scrolling main menu** (swipe the options up and down).
-2. **A satisfying "gulp" animation** when you eat a fish, with combos, rings, sparkles and screen kick.
-3. **A dramatic defeat animation** when you are eaten (slow motion, lunge, screen shake and flash, X-eyes).
-4. **200 new levels:** 300 levels in 30 worlds in total.
-5. **Much longer levels** (about 45 seconds at level 1, up to about 3 minutes at level 300), with **checkpoint flags** so a long level is not unfair.
+1. **Coins for eating fish** – bigger fish give more coins.
+2. **17 fish to buy in the Fish Shop** – from a guppy to a shark and a **baby whale** (plus more skins, patterns, trails and extras). Coins only, **no in-app purchases**.
+3. **Ads, ready to switch on** – a startup ad, an ad between levels, and optional rewarded videos for more coins. They stay **off** until you add the AdMob plugin (see `ADS_GUIDE.md`).
+4. A loading screen at start (the place where the startup ad is shown).
 
-> About "length": your message said "the length of running is very short. I want to make it short". I understood that you want the levels **longer**.
-> If you really wanted them even shorter, see section 3 (one number to change).
+You can release this version **without ads first** (nothing in Play Console changes) and switch the ads on later. That is what I recommend, see section 6.
 
 ---
 
-## 1. How to put this update on GitHub
+## 1. Put the update on GitHub
 
-### Easy way (recommended): upload the CHANGED FILES zip
-1. Unzip `FishEvolution-v1.1-changed-files.zip` on your PC. You get folders `scripts`, `tests`, `store`, `docs`, `tools` and a few files.
-2. Open your repository on GitHub → **Add file → Upload files**.
-3. Drag the **contents** of the unzipped folder onto the page (the folders `scripts`, `tests`, … and the loose files). GitHub keeps the folder structure and **replaces** same-named files.
-4. Commit. Then check that the `scripts` folder now has **23 files** (it had 21; two are new: `scroll_menu.gd` and `checkpoint_flag.gd`).
-5. **Actions → Build Android → Run workflow.** Install the new APK on your phone and test it (checklist in section 6).
+1. Unzip `FishEvolution-v1.2-changed-files.zip`.
+2. GitHub → your repository → **Add file → Upload files** → drag the **contents** of the unzipped folder (the folders `scripts`, `scenes`, `tests`, `tools`, `ads`, `store`, `docs` and the loose files). Same-named files are replaced. Commit.
+3. The hidden folder **`.github/workflows/build-apk.yml`** may not upload by drag-and-drop. If you don't see it changed on GitHub, open that file on GitHub → pencil icon → replace everything with the text of the separate `build-apk.yml` I gave you → commit.
+4. Check that `scripts` now has **26 files** (it had 23) and `scenes` has **6** (`splash.tscn` is new).
+5. **Actions → Build Android → Run workflow**. Install the APK and test (section 7). Then upload the new AAB to Play Console as an update (same steps as before).
 
-### Safest way: replace everything
-Upload the whole `FishEvolution-OceanRun-project.zip` content the same way. Both ways give the same result.
+The build says "No AdMob plugin in this repository - building WITHOUT ads." – that is correct for now.
+
+Players keep their progress, coins and bought designs. Everyone starts with the free fish "Goldie".
 
 ### Files in the update
-**New files (3):**
-| File | What it is |
-|---|---|
-| `scripts/scroll_menu.gd` | The finger-scrollable menu list |
-| `scripts/checkpoint_flag.gd` | The checkpoint flags in the sea |
-| `CHANGES.md` | This document |
+**New (10):** `scenes/splash.tscn`, `scripts/splash.gd` (loading screen), `scripts/ad_config.gd`, `scripts/ad_service.gd`, `ads/admob_backend.gd.txt` (the ads, inactive until the plugin is added),
+`ADS_GUIDE.md`, `PRIVACY_POLICY_WITH_ADS.md`, `docs/privacy-policy-with-ads.html`, `store/store_listing_with_ads.md`, `tools/render_species_preview.py`.
 
-**Changed files (17):**
+**Changed (15):**
 | File | What changed |
 |---|---|
-| `scripts/game_state.gd` | 300 levels, 30 worlds, level length, harder levels 101-300, checkpoint settings, fewer coins per km |
-| `scripts/game.gd` | Eat animation + combo, defeat animation + slow motion, shake, checkpoints, "continue", new speed-bonus rule, flags |
-| `scripts/player.gd` | Defeat animation (spin, X-eyes, fade), revive |
-| `scripts/fish.gd` | "Gulp" animation, predator lunge, per-level chase and rest times |
-| `scripts/fish_art.gd` | X-eyes for a defeated fish |
-| `scripts/fx.gd` | Shock-wave rings, sparkles, bigger pop-up text |
-| `scripts/audio_manager.gd` | New "crunch" sound, pitch control (combos get higher) |
-| `scripts/hud.gd` | Screen flash, "Continue from checkpoint" button, new texts |
-| `scripts/main_menu.gd` | Scrolling list menu, "How to Play" and "Exit Game" items |
-| `scripts/level_select.gd` | 30 pages, "<<" and ">>" jump buttons |
-| `scripts/screenshot_tool.gd`, `tools/caption_screenshots.py` | "300 levels" wording |
-| `tests/test_rules.gd` | Tests for 300 levels, rest times, level length, checkpoints |
-| `export_presets.cfg` | Version name 1.1.0 |
-| `store/store_listing.md`, `docs/index.html`, `README.md` | "300 levels / 30 worlds" wording and new features |
-
-Your **saved progress stays**: unlocked levels, coins and bought designs keep working.
+| `scripts/game_state.gd` | 17 fish species, coin rule, shop categories (Fish added), launch counter, "Natural" colours logic |
+| `scripts/fish_art.gd` | Drawing of all fish shapes: tails, fins, swordfish bill, hammer head, anglerfish lure, dolphin beak, whale spout, ray body… |
+| `scripts/game.gd` | Coins for eating (+ popup), ad hooks (between levels, double coins) |
+| `scripts/shop.gd` | Tabs for Fish/Skins/…, pages of 8, "Owned x of y", prices with commas, free-coins button |
+| `scripts/main_menu.gd` | "Free Coins" item, privacy-settings button, "How to Play" text, About text (v1.2.0) |
+| `scripts/hud.gd` | "Double coins" button, tutorial text |
+| `scripts/player.gd`, `scripts/fish_preview.gd` | Draw the chosen fish species |
+| `project.godot` | Start scene = loading screen; AdService registered |
+| `export_presets.cfg` | Version name 1.2.0 |
+| `.github/workflows/build-apk.yml` | Switches to "with ads" automatically when the plugin is present; blocks release builds with test ads |
+| `scripts/screenshot_tool.gd`, `tests/test_rules.gd`, `store/store_listing.md` | Updated for the new features |
 
 ---
 
-## 2. What you can change (one place for each thing)
+## 2. Coins from eating (what you asked for)
 
-### Levels – `scripts/game_state.gd`
-| Constant / line | What it does | Default |
-|---|---|---|
-| `TOTAL_LEVELS` | How many levels exist | 300 |
-| `LEVEL_LENGTH_SCALE` | **Multiplier for every level's length.** 0.5 = half as long, 2.0 = twice as long | 1.0 |
-| `LEVEL_LENGTH_BASE`, `LEVEL_LENGTH_PER_LEVEL` | Length = (base + level x per-level) x scale, in pixels | 9000, 110 |
-| `CHECKPOINT_FRACTIONS` | Where the flags stand (0.25 = a quarter of the way) | 0.25, 0.5, 0.75 |
-| `CONTINUES_PER_ATTEMPT` | How many times you may continue from a flag per attempt | 3 |
-| `COIN_GROUPS_PER_KM` | Coins (groups of 5) per 1000 px | 1.0 |
-| `get_level_config()` | All difficulty numbers (fish per km, predator speed, jellyfish, rocks, tiredness) | see file |
-| `_ensure_themes()` | The names of worlds 11-30 and how their colours are made | see file |
+* Coins per fish = **size x 0.15**, at least 1. Small fish ~2 coins, medium ~4-5, big predators ~10-18. Shown as a gold "+N coins" popup and in the counter.
+* Plus the old coin groups in the water and the level bonus. The level-complete screen shows the total; with ads on, "Watch ad: double coins" doubles it.
+* Change the rate: `COIN_PER_SIZE` in `scripts/game_state.gd` (0.15). Double it = twice the coins.
 
-Speed of the fish is about 200-300 pixels per second, so **length / 200 = seconds**.
-Examples: level 1 = about 46 s, level 100 = about 100 s, level 300 = about 210 s.
+## 3. The Fish Shop
 
-### How hard levels 101-300 are
-`get_level_config()` has two ramps: `t` (levels 1-100, unchanged) and `u` (levels 101-300). Everything with `* u` is the extra difficulty:
-more predators and medium fish, longer-sighted predators, more jellyfish and rocks, **longer chases** (`chase_time` 5 to 8 s) and **shorter rests** (`rest_time` 2.5 to 1.2 s).
-Fairness rules that are always kept: predators are never faster than 200 px/s (the player is at least 200), always get tired, and never exceed size 120.
-If you change these numbers, run the tests (`tools/smoke_test.sh` or the workflow) – they check these rules.
+**Tabs:** Fish · Skins · Patterns · Trails · Extras. Tap an item to preview it on the big fish, then Buy / Equip. 8 items per page, "Owned 3 of 17" counter.
+The old skin "Goldie" is now called **"Natural"** = *use the fish's own colours*. Buy a skin to override the colours of any fish.
+Fish are cosmetic: every fish has the same size rules, speed and hit-box, so the game stays fair.
 
-### Animations
-| What | Where | What to tweak |
-|---|---|---|
-| Eating: gulp, ring, sparkles, popup | `game.gd` → `_eat()`; `fish.gd` → `swallow()` (`SWALLOW_TIME`) | more/less `fx.sparkles(...)` count, ring size, `_shake` strength |
-| Combo | `game.gd` → `_eat()` (`_combo_timer = 1.6` = seconds to keep a combo, bonus = 5 per step) | window and bonus |
-| Getting eaten | `game.gd` → `_lose()` | `Engine.time_scale = 0.35` (slow motion), `_slowmo = 0.7` (how long), `_shake = 18.0`, flash colour, `_end_delay = 1.6` |
-| Predator lunge | `fish.gd` → `chomp()` / `_lunge_step()` | lunge speed (520) and time (0.3) |
-| Defeated fish spin and fade | `player.gd` → `_process()` / `_draw()` | spin speed `death_t * 6.5`, fade timing |
-| Screen flash | `hud.gd` → `flash()` | called from `game.gd` with colour, strength, seconds |
-| Rings / sparkles / popups | `fx.gd` | `ring()`, `sparkles()`, `popup()` |
-| Sound of being eaten | `audio_manager.gd` → `_chomp()` | length and noise level |
+### The 17 fish
+| Fish | Price | ~Level you can afford it* | Look |
+|---|---|---|---|
+| Goldie | free | 1 | round goldfish (starter) |
+| Guppy | 400 | 4 | small, big pink fan tail |
+| Clownfish | 700 | 9 | orange with white bands |
+| Pufferfish | 1,000 | 15 | round and spiky |
+| Angelfish | 1,500 | 23 | tall disc with long fins |
+| Koi | 2,200 | 34 | red with white spots |
+| Stingray | 3,000 | 46 | diamond body, whip tail |
+| Swordfish | 4,000 | 59 | long bill, sail fin |
+| Piranha | 5,000 | 74 | red belly, teeth, angry eyes |
+| Anglerfish | 6,500 | 89 | glowing lure, teeth |
+| Dolphin | 9,000 | 107 | beak, curved fin |
+| Shark | 12,000 | 128 | grey shark |
+| Hammerhead | 16,000 | 152 | T-shaped head |
+| Orca | 22,000 | 181 | black and white |
+| Narwhal | 30,000 | 215 | long tusk |
+| Baby Whale | 40,000 | 252 | big, cute, water spout |
+| Golden Whale | 75,000 | after 300 | the legendary prize |
 
-### Menu – `scripts/main_menu.gd` and `scripts/scroll_menu.gd`
-* Add an option: in `_build_main()` add `list.add_item("My option", _on_my_option)` and write the function `_on_my_option()`.
-* Change the order: reorder the `list.add_item(...)` lines.
-* Look: in `scroll_menu.gd` change `item_w`, `item_h`, `gap`, `font_size`, `ITEM_COLOR`. The list is 480 x 470 px in `_build_main()` (`list.custom_minimum_size`).
-* Scrolling feel: `DEADZONE` (how far a finger must move to count as a swipe), the glide in `_process()`.
+\* If a player buys the fish in this order and plays each level once. It is an **estimate**, assuming a player eats about 35% of small fish, 30% of medium and 15% of big fish and collects 70% of the coins.
+Average coins per level: about 130 at level 1, 285 at level 50, 510 at level 100, 900 at level 200, 1,400 at level 300. Replaying levels and watching optional ads make it faster.
+Total of all items: about 235,000 coins, so there is a long goal to keep players coming back.
+
+### Change prices or add a fish
+* **Prices:** `shop_items` in `scripts/game_state.gd` – change the `"price"` number.
+* **A new fish:** copy one `sp_...` line in `shop_items`, give it a new `"id"` (starting with `sp_`), a `"name"`, a `"price"`, three colours and a `"spec"`.
+  The `spec` options (tail, fin, nose, teeth, bands…) are listed in the comment at the top of `scripts/fish_art.gd`.
+  Examples: `{"base": 1, "bx": 1.2, "nose": "bill", "tail": "crescent"}`. Keep `bx` between 0.8 and 1.45 so it fits the game's hit-box.
+* **See all fish without running the game:** `python3 tools/render_species_preview.py scripts/game_state.gd sheet.png` (needs `pip install pillow`).
+  This preview uses a Python copy of the drawing code, so tiny differences to the real game are possible.
 
 ---
 
-## 3. Make levels shorter or longer – the quick answer
-Open `scripts/game_state.gd` and change **one number**:
-```
-const LEVEL_LENGTH_SCALE := 1.0     # 0.6 = shorter levels, 1.5 = longer levels
-```
-Upload the file, run the build. Nothing else needs to change (checkpoints, coins and speed bonus adapt automatically).
+## 4. Ads (all in `ADS_GUIDE.md`)
+Summary: startup ad (3rd launch on), ad between levels (after every level you finish, when you tap Next Level), optional rewarded videos (double coins, free coins in menu and shop).
+Everything is adjustable in `scripts/ad_config.gd`. Setup, Play Console changes, privacy policy, testing and troubleshooting are in the guide.
 
-## 4. New game rules explained
-* **Checkpoints:** flags at 25 %, 50 % and 75 % of every level turn green when you pass them. If a predator eats you after you passed a flag, the lose screen offers
-  **"Continue from checkpoint"** (3 times per attempt). You come back at the flag with the size you had there, protected for 2.5 seconds, and nearby predators are moved away.
-  **"Retry level"** always starts the level from the beginning. Coins you collected are always kept.
-* **Combo:** eat another fish within 1.6 seconds to build a combo: +5 points per step, a bigger popup and a higher "eat" pitch.
-* **Speed bonus** at the finish: uses a "par time" of length / 200 seconds, 4 points per second saved.
-* **Coins:** fewer groups per km, because levels are longer, so coins per level are about the same as before at the start and grow later.
+---
 
 ## 5. Things I could not test (honest list)
-* I cannot run Godot here. The code is statically checked and the difficulty numbers are verified for all 300 levels, but the **animations and the scrolling menu have not been seen on a real device**.
-* Scrolling is my own code (not Godot's built-in scroll container) so that dragging never presses a button by accident. On a phone: swipe the list. On a PC: mouse drag or wheel.
-* Very long levels create about 900 fish and 250 jellyfish at level 300. Only those near you are active, so it should be smooth, but please test a high level on an older phone.
-  If it is slow, lower `LEVEL_LENGTH_SCALE` or the densities in `get_level_config()` and tell me.
+* I cannot run Godot here. The code is checked statically and the fish drawing was checked by rendering a Python copy, but **nothing has been seen on a phone**.
+* **The ads code is completely untested** with the real plugin. It follows the plugin's version 5 documentation. Test with test ads first and send me any error.
+* With 17 fish and long levels, check performance on an older phone (level 100+).
 
-## 6. Test checklist after the build
-1. Main menu: the list scrolls up/down by finger; tapping an item opens it; no item opens when you drag.
-2. Eat a fish: it spins into your mouth, ring + sparkles + "+points"; eat several quickly: "COMBO xN".
-3. Get eaten: slow motion, shake, red flash, predator lunges, your fish spins belly-up with X-eyes; then the lose screen.
-4. Pass a flag (it turns green, "Checkpoint saved!"), get eaten, tap **Continue from checkpoint**: you restart at the flag and are protected for a moment.
-5. Level 1 takes roughly 45-60 seconds. Level select shows 30 pages ("World 1 of 30") and the `<<` `>>` buttons work.
-6. Levels 101+: new world names/colours (e.g. "Tropical Lagoon"). Check one on a weaker phone.
-7. Your old progress, coins and bought designs are still there.
+## 6. Two ways to release
+**A) Recommended – release now without ads:** upload the AAB as an update. No Play Console changes needed (still "no ads"). Players get coins from eating and the new shop. Add ads later as version 1.3 using `ADS_GUIDE.md`.
+**B) Ads straight away:** first finish AdMob setup, plugin and Play Console changes (`ADS_GUIDE.md` sections 3-7), then release once.
 
-## 7. Releasing on Google Play
-Nothing changes in the Play Console steps. Upload the new `.aab` (the version code goes up automatically) as a new release.
-You may refresh the store text with `store/store_listing.md` (now says 300 levels / 30 worlds and mentions checkpoints and combos).
-The privacy policy stays the same (still no ads, no data collected).
-
-## 8. Ads (optional, later)
-The ads kit is parked in `optional_ads/` (not used by the game). When you want ads, tell me and I will apply them on top of this version.
+## 7. Test checklist
+1. Start the game: logo screen for about a second, then the menu.
+2. Eat fish: a gold "+N coins" popup appears, the coin counter rises. Bigger fish give more.
+3. Fish Shop: five tabs; Fish tab shows pages ("Page 1 / 3"); preview a Shark or the Baby Whale; "Need N more coins" when short; buy and equip with enough coins (to test quickly, play a few levels).
+4. Your chosen fish is used in the game, in the preview, and keeps its look after restarting the game.
+5. Old players: coins and unlocked levels are still there; the fish is Goldie.
+6. Everything from version 1.1 still works (scrolling menu, animations, checkpoints).
+7. With the ad plugin later: follow `ADS_GUIDE.md`, section 5.

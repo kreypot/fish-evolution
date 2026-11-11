@@ -7,12 +7,12 @@
 Fish Evolution: Ocean Run
 ```
 
-**Short description (max 80; yours is 73):**
+**Short description (max 80; yours is 65):**
 ```
-Eat fish, grow huge & escape sharks! 300 levels. Offline, no ads.
+Eat fish, grow huge, collect 17 fish from guppy to whale! No ads.
 ```
 
-**Full description (max 4000; yours is ~1250):**
+**Full description (max 4000; yours is ~1578):**
 ```
 Eat fish, grow bigger and survive the ocean! Fish Evolution: Ocean Run is a free offline fish game where you start as a tiny fish and eat your way to the top of the underwater food chain.
 
@@ -20,16 +20,17 @@ Swim with one thumb, eat smaller fish to grow bigger with every bite, and escape
 
 WHY YOU'LL LOVE IT
 • 300 levels across 30 underwater worlds, from sunny coral reefs to the dark deep sea
+• Collect coins from every fish you eat, and unlock 17 different fish in the Fish Shop: guppy, clownfish, pufferfish, angelfish, koi, stingray, swordfish, piranha, anglerfish, dolphin, shark, hammerhead, orca, narwhal and even a baby whale!
+• Customize your fish with colors, stripes, spots, scales, glowing trails, sunglasses and crowns
 • Grow and evolve: every fish you eat makes you bigger and unlocks new fins and stripes
+• Combo bonuses, checkpoint flags and big, satisfying gulp animations
 • Smart ocean creatures that wander, patrol, chase and flee
-• Long adventures with checkpoint flags, combo bonuses and big, satisfying gulp animations
 • Dodge jellyfish and swim around rocks to reach the finish line
-• Collect coins and customize your fish in the Fish Shop: colors, scales, stripes, spots, glowing trails, sunglasses and crowns
 • Easy one-finger controls for phones and tablets
 • Play offline anywhere, no WiFi or internet needed
-• No ads, no pop-ups, no data collection
+• No ads, no pop-ups, no data collection. No in-app purchases: everything is unlocked with coins you earn
 
-A relaxing but exciting casual arcade game for kids, teens and adults who love fish games, ocean adventures and survival challenges. Can you evolve into the biggest fish in the sea and finish all 300 levels?
+A relaxing but exciting casual arcade game for kids, teens and adults who love fish games, ocean adventures and survival challenges. Can you collect every fish and finish all 300 levels?
 
 Download Fish Evolution: Ocean Run now and start your underwater adventure!
 ```

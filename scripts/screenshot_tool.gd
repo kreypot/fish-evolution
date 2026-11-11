@@ -8,10 +8,10 @@ var out_dir := "build/shots"
 
 # One entry per gameplay screenshot. size = player size, frac = how far into the level, skin etc. = shop look.
 var gameplay_shots: Array = [
-	{"name": "01_eat_to_grow", "level": 8, "size": 46.0, "frac": 0.30, "frames": 150, "skin": "skin_violet", "pat": "pat_scales", "acc": "acc_none", "trail": "trail_pink"},
-	{"name": "02_escape_predators", "level": 34, "size": 38.0, "frac": 0.35, "frames": 150, "skin": "skin_ocean", "pat": "pat_stripes", "acc": "acc_crown", "trail": "trail_bubbles"},
-	{"name": "04_volcano_world", "level": 62, "size": 58.0, "frac": 0.30, "frames": 150, "skin": "skin_ruby", "pat": "pat_gold", "acc": "acc_shades", "trail": "trail_gold"},
-	{"name": "06_neon_abyss", "level": 82, "size": 64.0, "frac": 0.30, "frames": 150, "skin": "skin_lime", "pat": "pat_spots", "acc": "acc_none", "trail": "trail_rainbow"},
+	{"name": "01_eat_to_grow", "level": 8, "size": 46.0, "frac": 0.30, "frames": 150, "skin": "skin_goldie", "pat": "pat_none", "acc": "acc_none", "trail": "trail_pink", "species": "sp_dolphin"},
+	{"name": "02_escape_predators", "level": 34, "size": 38.0, "frac": 0.35, "frames": 150, "skin": "skin_goldie", "pat": "pat_none", "acc": "acc_crown", "trail": "trail_bubbles", "species": "sp_shark"},
+	{"name": "04_volcano_world", "level": 62, "size": 58.0, "frac": 0.30, "frames": 150, "skin": "skin_goldie", "pat": "pat_none", "acc": "acc_none", "trail": "trail_gold", "species": "sp_orca"},
+	{"name": "06_neon_abyss", "level": 82, "size": 64.0, "frac": 0.30, "frames": 150, "skin": "skin_goldie", "pat": "pat_none", "acc": "acc_none", "trail": "trail_rainbow", "species": "sp_whale"},
 	{"name": "07_start_small", "level": 1, "size": 22.0, "frac": 0.12, "frames": 120, "skin": "skin_goldie", "pat": "pat_none", "acc": "acc_none", "trail": "trail_bubbles"},
 ]
 
@@ -57,8 +57,8 @@ func _unlock_everything() -> void:
 		GameState.best_scores[i] = 800 + i * 37
 
 
-func _equip(skin: String, pat: String, acc: String, trail: String) -> void:
-	GameState.equipped = {"skin": skin, "pattern": pat, "trail": trail, "acc": acc}
+func _equip(skin: String, pat: String, acc: String, trail: String, species: String = "sp_goldie") -> void:
+	GameState.equipped = {"species": species, "skin": skin, "pattern": pat, "trail": trail, "acc": acc}
 
 
 func _run() -> void:
@@ -69,7 +69,7 @@ func _run() -> void:
 		await _gameplay(spec)
 
 	# 2) shop
-	_equip("skin_violet", "pat_gold", "acc_crown", "trail_gold")
+	_equip("skin_goldie", "pat_none", "acc_crown", "trail_gold", "sp_whale")
 	var shop: Node = load("res://scenes/shop.tscn").instantiate()
 	add_child(shop)
 	await _frames(40)
@@ -109,7 +109,7 @@ func _start_game(level: int) -> Node:
 
 
 func _gameplay(spec: Dictionary) -> void:
-	_equip(spec["skin"], spec["pat"], spec["acc"], spec["trail"])
+	_equip(spec["skin"], spec["pat"], spec["acc"], spec["trail"], str(spec.get("species", "sp_goldie")))
 	var game: Node = await _start_game(int(spec["level"]))
 	var p = game.player
 	p.size_val = float(spec["size"])

@@ -10,6 +10,7 @@ signal menu_requested
 signal next_requested
 signal tutorial_closed
 signal shop_requested
+signal double_coins_requested   # rewarded ad on the level-complete screen
 signal continue_requested   # "Continue from checkpoint" on the lose screen
 signal back_requested   # Android back button or Esc
 signal app_paused       # app lost focus / went to background
@@ -136,6 +137,10 @@ func _emit_next() -> void:
 	next_requested.emit()
 
 
+func _emit_double() -> void:
+	double_coins_requested.emit()
+
+
 func _emit_continue() -> void:
 	continue_requested.emit()
 
@@ -249,7 +254,7 @@ func show_tutorial() -> void:
 	_show_overlay("How to Play", Color("#ffd23a"), [
 		"Touch and drag anywhere to swim - the joystick appears under your thumb.",
 		"GREEN ring = you can eat it. RED ring = it can eat you!",
-		"Eating makes you grow and evolve, so you can eat bigger fish later.",
+		"Eating makes you grow and evolve, and every fish you eat gives you coins for the Fish Shop.",
 		"Avoid jellyfish and reach the chequered FINISH wall on the right.",
 		"Flags save your progress: if you get eaten after a flag, you can continue from it.",
 	], [["Let's swim!", _emit_tutorial]])
@@ -268,6 +273,12 @@ func show_win(d: Dictionary) -> void:
 		title = "You beat all %d levels!" % GameState.TOTAL_LEVELS
 	else:
 		buttons.append(["Next Level", _emit_next])
+	# Optional rewarded video (only when ads are active and a video is ready): double this level's coins
+	var gain: int = int(d["coins_run"]) + int(d["bonus_coins"])
+	if d.get("double_done", false):
+		lines.append("Coins doubled!  +%d" % int(d.get("double_gain", 0)))
+	elif gain > 0 and AdService.is_rewarded_ready():
+		buttons.append(["Watch ad: double coins (+%d)" % gain, _emit_double])
 	buttons.append(["Replay", _emit_restart])
 	buttons.append(["Fish Shop", _emit_shop])
 	buttons.append(["Main Menu", _emit_menu])

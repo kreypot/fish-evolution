@@ -107,4 +107,4 @@ func _draw() -> void:
 		s *= clampf(1.0 - maxf(death_t - 0.8, 0.0) * 0.9, 0.2, 1.0)
 	var xf := Transform2D(tilt + wobble, Vector2(t, 1.0), 0.0, Vector2.ZERO)
 	var cols: Array = FishArt.resolve_colors(look, _clock)
-	FishArt.draw_fish(self, xf, s, 0, cols[0], cols[1], cols[2], sin(phase) * (0.2 if dead else 1.0), 0.0 if dead else clampf(mouth * 4.0, 0.0, 1.0), get_stage(), int(look.get("pattern", 0)), int(look.get("acc", 0)), dead)
+	FishArt.draw_fish(self, xf, s, 0, cols[0], cols[1], cols[2], sin(phase) * (0.2 if dead else 1.0), 0.0 if dead else clampf(mouth * 4.0, 0.0, 1.0), get_stage(), int(look.get("pattern", 0)), int(look.get("acc", 0)), dead, look.get("spec", {}))

@@ -1,13 +1,20 @@
 extends Control
-## Fish Shop: spend coins on skins, patterns, trails and extras.
+## Fish Shop: spend coins on fish species, skins, patterns, trails and extras.
 ## Tap an item to preview it on the fish, then Buy / Equip.
 ## Items come from GameState.shop_items - add more there and they appear here.
 
 const UITheme = preload("res://scripts/ui_theme.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
 const FishPreview = preload("res://scripts/fish_preview.gd")
+const ITEMS_PER_PAGE := 8   # 4 columns x 2 rows; more items = more pages
 
-var _cat := "skin"
+var _cat := "species"
+var _page := 0
+var _page_label: Label
+var _count_label: Label
+var _prev_btn: Button
+var _next_btn: Button
+var _ad_btn: Button = null
 var _selected := ""
 var _coin_label: Label
 var _tabs: HBoxContainer
@@ -67,6 +74,19 @@ func _ready() -> void:
 	_grid.add_theme_constant_override("v_separation", 10)
 	right.add_child(_grid)
 
+	var nav := HBoxContainer.new()
+	nav.add_theme_constant_override("separation", 12)
+	_prev_btn = UITheme.button("<", _on_prev_page, 90.0, 54.0)
+	_next_btn = UITheme.button(">", _on_next_page, 90.0, 54.0)
+	_page_label = UITheme.label("", 24)
+	_count_label = UITheme.label("", 24, Color("#ffd23a"))
+	_count_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nav.add_child(_prev_btn)
+	nav.add_child(_page_label)
+	nav.add_child(_next_btn)
+	nav.add_child(_count_label)
+	right.add_child(nav)
+
 	_info = UITheme.label("", 26)
 	_info.custom_minimum_size = Vector2(0, 40)
 	right.add_child(_info)
@@ -78,25 +98,57 @@ func _ready() -> void:
 	row.add_child(_action)
 	row.add_child(UITheme.button("Back", _on_back, 200.0, 72.0))
 
-	_select_category("skin")
+	# Optional "free coins" rewarded video (only exists when ads are active)
+	if AdService.enabled:
+		_ad_btn = UITheme.button("", _on_watch_ad, 620.0, 62.0)
+		_ad_btn.add_theme_font_size_override("font_size", 28)
+		right.add_child(_ad_btn)
+		_update_ad_button()
+
+	_select_category("species")
+
+
+func _process(_delta: float) -> void:
+	if _ad_btn != null:
+		_update_ad_button()
+
+
+func _update_ad_button() -> void:
+	var wait: int = AdService.rewarded_cooldown_left()
+	if AdService.is_rewarded_ready():
+		_ad_btn.text = "Watch ad: +%s free coins" % _fmt(AdService.free_coins_amount())
+		_ad_btn.disabled = false
+	elif wait > 0:
+		_ad_btn.text = "Next free coins in %d s" % wait
+		_ad_btn.disabled = true
+	else:
+		_ad_btn.text = "Loading ad..."
+		_ad_btn.disabled = true
+
+
+func _on_watch_ad() -> void:
+	AdService.watch_for_free_coins(_refresh)
 
 
 func _select_category(cat: String) -> void:
 	_cat = cat
 	_selected = ""
-	for it in GameState.items_in(cat):
-		if GameState.is_equipped(it["id"]):
-			_selected = it["id"]
+	_page = 0
+	var items: Array = GameState.items_in(cat)
+	for i in items.size():
+		if GameState.is_equipped(items[i]["id"]):
+			_selected = items[i]["id"]
+			_page = floori(float(i) / float(ITEMS_PER_PAGE))   # open the page that has your equipped item
 	_refresh()
 
 
 func _refresh() -> void:
-	_coin_label.text = "Coins: %d" % GameState.coins
+	_coin_label.text = "Coins: %s" % _fmt(GameState.coins)
 
 	for c in _tabs.get_children():
 		c.queue_free()
 	for cat in GameState.CATEGORY_ORDER:
-		var tb := UITheme.button(GameState.CATEGORY_NAMES[cat], _on_tab.bind(cat), 150.0, 62.0)
+		var tb := UITheme.button(GameState.CATEGORY_NAMES[cat], _on_tab.bind(cat), 140.0, 62.0)
 		tb.add_theme_font_size_override("font_size", 26)
 		if cat == _cat:
 			tb.add_theme_stylebox_override("normal", UITheme.selected_box())
@@ -104,7 +156,23 @@ func _refresh() -> void:
 
 	for c in _grid.get_children():
 		c.queue_free()
-	for it in GameState.items_in(_cat):
+	var all_items: Array = GameState.items_in(_cat)
+	var pages: int = maxi(1, ceili(float(all_items.size()) / float(ITEMS_PER_PAGE)))
+	_page = clampi(_page, 0, pages - 1)
+	var first: int = _page * ITEMS_PER_PAGE
+	var owned_count := 0
+	for it in all_items:
+		if GameState.is_owned(it["id"]):
+			owned_count += 1
+	_page_label.text = "Page %d / %d" % [_page + 1, pages]
+	_count_label.text = "Owned %d of %d" % [owned_count, all_items.size()]
+	_prev_btn.disabled = _page <= 0
+	_next_btn.disabled = _page >= pages - 1
+	_prev_btn.visible = pages > 1
+	_next_btn.visible = pages > 1
+	_page_label.visible = pages > 1
+	for idx in range(first, mini(first + ITEMS_PER_PAGE, all_items.size())):
+		var it: Dictionary = all_items[idx]
 		var id: String = it["id"]
 		var status := ""
 		if GameState.is_equipped(id):
@@ -112,7 +180,7 @@ func _refresh() -> void:
 		elif GameState.is_owned(id):
 			status = "OWNED"
 		else:
-			status = "%d coins" % int(it["price"])
+			status = "%s coins" % _fmt(int(it["price"]))
 		var b := UITheme.button("%s\n%s" % [it["name"], status], _on_item.bind(id), 175.0, 92.0)
 		b.add_theme_font_size_override("font_size", 22)
 		if id == _selected:
@@ -140,13 +208,36 @@ func _update_action() -> void:
 		_action.text = "Equip"
 		_action.disabled = false
 	elif GameState.coins >= price:
-		_info.text = "%s costs %d coins." % [it["name"], price]
-		_action.text = "Buy for %d coins" % price
+		_info.text = "%s costs %s coins." % [it["name"], _fmt(price)]
+		_action.text = "Buy for %s coins" % _fmt(price)
 		_action.disabled = false
 	else:
 		_info.text = "Collect coins in levels to unlock %s." % it["name"]
-		_action.text = "Need %d more coins" % (price - GameState.coins)
+		_action.text = "Need %s more coins" % _fmt(price - GameState.coins)
 		_action.disabled = true
+
+
+func _on_prev_page() -> void:
+	_page -= 1
+	_refresh()
+
+
+func _on_next_page() -> void:
+	_page += 1
+	_refresh()
+
+
+## 12000 -> "12,000"
+func _fmt(n: int) -> String:
+	var digits := str(absi(n))
+	var out := ""
+	var count := 0
+	for i in range(digits.length() - 1, -1, -1):
+		out = digits[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return ("-" if n < 0 else "") + out
 
 
 func _on_tab(cat: String) -> void:

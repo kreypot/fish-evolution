@@ -269,6 +269,7 @@ func _build_hud() -> void:
 	hud.back_requested.connect(_on_back)
 	hud.shop_requested.connect(_go_shop)
 	hud.continue_requested.connect(_continue_from_checkpoint)
+	hud.double_coins_requested.connect(_on_double_coins)
 	hud.app_paused.connect(_pause)
 
 
@@ -411,6 +412,10 @@ func _eat(f: Fish, idx: int) -> void:
 	var combo_bonus := (_combo - 1) * 5
 	score += pts + combo_bonus
 	eaten += 1
+	# Coins for eating: bigger fish give more coins (small fish ~2, medium ~5, big predators ~12)
+	var coin_gain: int = maxi(1, int(round(f.size_val * GameState.COIN_PER_SIZE)))
+	coins_run += coin_gain
+	GameState.add_coins(coin_gain)
 	var tier_before := int(player.size_val / 10.0)
 	var stage_before: int = player.get_stage()
 	player.eat_fish(f.size_val)
@@ -423,6 +428,8 @@ func _eat(f: Fish, idx: int) -> void:
 	fx.ring(mouth_pos, player.shown_size * 0.5, player.shown_size * (1.6 + big), f.body_color.lightened(0.3))
 	fx.sparkles(mouth_pos, Color(1.0, 0.95, 0.5), 4 + int(6.0 * big))
 	fx.popup(f.position + Vector2(0.0, -f.size_val - 10.0), "+%d" % pts, Color(1.0, 0.95, 0.4), 28 + int(10.0 * big))
+	fx.popup(f.position + Vector2(0.0, -f.size_val + 22.0), "+%d coin%s" % [coin_gain, "" if coin_gain == 1 else "s"], Color(1.0, 0.82, 0.2), 24)
+	fx.burst(f.position, Color(1.0, 0.85, 0.2), 3 + mini(coin_gain, 8), 140.0)   # little gold sparks
 	if _combo >= 2:
 		var combo_col := Color(1.0, 0.65, 0.2).lerp(Color(1.0, 0.3, 0.5), clampf(float(_combo) / 8.0, 0.0, 1.0))
 		fx.popup(player.position + Vector2(0.0, -player.shown_size - 60.0), "COMBO x%d  +%d" % [_combo, combo_bonus], combo_col, 30 + mini(_combo, 8) * 2)
@@ -591,6 +598,7 @@ func _win() -> void:
 		"time": int(elapsed),
 		"is_last": level >= GameState.TOTAL_LEVELS,
 	}
+	AdService.register_level_win()
 	hud.update_stats(player.size_val, score, 1.0, GameState.coins)
 	fx.burst(player.position + Vector2(100.0, 0.0), Color(1.0, 0.9, 0.3), 30, 300.0)
 	fx.ring(player.position, 20.0, 260.0, Color(1.0, 0.9, 0.3), 0.8)
@@ -657,7 +665,30 @@ func _restart() -> void:
 
 func _next_level() -> void:
 	GameState.current_level = mini(level + 1, GameState.TOTAL_LEVELS)
+	# Between-level ad (rules in ad_config.gd). The next level loads when the ad is closed.
+	if AdService.maybe_show_interstitial(_restart):
+		return
 	_restart()
+
+
+## "Watch ad: double coins" on the level-complete screen. The reward is paid only if the video was watched.
+func _on_double_coins() -> void:
+	if state != S.WON or _stats.get("double_done", false):
+		return
+	AdService.show_rewarded(_grant_double_coins)
+
+
+func _grant_double_coins() -> void:
+	if _stats.get("double_done", false):
+		return
+	var gain: int = int(_stats["coins_run"]) + int(_stats["bonus_coins"])
+	GameState.add_coins(gain)
+	GameState.save_game()
+	_stats["coins_total"] = GameState.coins
+	_stats["double_done"] = true
+	_stats["double_gain"] = gain
+	AudioManager.play_sfx("coin")
+	hud.show_win(_stats)
 
 
 func _go_shop() -> void:

@@ -22,6 +22,9 @@ this project uses Godot 4.7.2 which provides that.
 * **Fish Shop** (main menu or win screen): Skins (8, incl. animated Rainbow), Patterns (stripes, spots, scales, gold scales), Trails (pink bubbles, gold dust, rainbow sparkles) and Extras (sunglasses, crown). Tap to preview, then Buy / Equip.
   Add your own items in `scripts/game_state.gd` → `shop_items`.
 
+## What's new in 1.2
+See **`CHANGES.md`**: coins for every fish you eat, 17 fish in the shop (guppy to baby whale), and ads ready to switch on (**`ADS_GUIDE.md`**).
+
 ## What's new in 1.1
 See **`CHANGES.md`**: scrolling menu, eat/defeat animations, 300 levels in 30 worlds, much longer levels with checkpoints, and exactly which files changed.
 
@@ -62,7 +65,8 @@ Worlds (10 levels each): Sunny Shallows, Coral Reef, Kelp Forest, Deep Blue, Sun
 ```
 project.godot  export_presets.cfg (APK + AAB presets)  icon.svg
 scenes/    main_menu, level_select, shop, game
-scripts/   game_state (AUTOLOAD: save, 300 levels, shop data)   audio_manager (AUTOLOAD)
+scripts/   game_state (AUTOLOAD: save, 300 levels, shop data)   audio_manager (AUTOLOAD)   ad_service (AUTOLOAD: ads)
+           ad_config (all ad settings)  splash (loading screen / startup ad)
            game (level manager)  player  fish (AI)  jellyfish  coin  fx
            fish_art (drawing, patterns, accessories)  fish_preview  shop  hud  joystick  ui_theme
            main_menu  scroll_menu  level_select  menu_bg  background  decor_chunk  finish_gate  checkpoint_flag

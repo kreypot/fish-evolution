@@ -1,0 +1,252 @@
+extends RefCounted
+## REAL AdMob implementation for the "AdMob" plugin by Poing Studios, version 5.x (Godot 4.2+).
+## This file only compiles when that plugin is installed and enabled, which is why it is stored as .txt.
+## The GitHub workflow copies it to scripts/admob_backend.gd automatically when addons/admob exists.
+## (To test in the Godot editor, copy it yourself: ads/admob_backend.gd.txt -> scripts/admob_backend.gd)
+##
+## Flow: consent form (Europe only, when required) -> start the Google ads SDK -> pre-load an App Open ad,
+## an Interstitial and a Rewarded ad -> show them when AdService asks -> reload after each use.
+
+var _ids: Dictionary = {}
+var _sdk_started := false
+var _sdk_ready := false
+
+var _app_open: AppOpenAd = null
+var _app_open_failed := false
+var _interstitial: InterstitialAd = null
+var _rewarded: RewardedAd = null
+
+var _app_open_load_cb := AppOpenAdLoadCallback.new()
+var _interstitial_load_cb := InterstitialAdLoadCallback.new()
+var _rewarded_load_cb := RewardedAdLoadCallback.new()
+
+var _showing = null                  # the full-screen ad on screen right now
+var _showing_kind := ""
+var _on_closed: Callable = Callable()
+var _on_reward: Callable = Callable()
+var _privacy_done: Callable = Callable()
+
+
+func start(ids: Dictionary) -> void:
+	_ids = ids
+	_app_open_load_cb.on_ad_loaded = _on_app_open_loaded
+	_app_open_load_cb.on_ad_failed_to_load = _on_app_open_load_failed
+	_interstitial_load_cb.on_ad_loaded = _on_interstitial_loaded
+	_interstitial_load_cb.on_ad_failed_to_load = _on_interstitial_load_failed
+	_rewarded_load_cb.on_ad_loaded = _on_rewarded_loaded
+	_rewarded_load_cb.on_ad_failed_to_load = _on_rewarded_load_failed
+
+	# 1) Ask for consent where the law requires it (Europe / UK). Players are not under age of consent: 13+ game.
+	var request := ConsentRequestParameters.new()
+	request.tag_for_under_age_of_consent = false
+	UserMessagingPlatform.consent_information.update(request, _on_consent_info_updated, _on_consent_info_failed)
+	# Safety net: if the consent callbacks never arrive, start the ads anyway after 8 seconds.
+	_after(8.0, _init_sdk)
+
+
+# --- consent -------------------------------------------------------------------
+
+func _on_consent_info_updated() -> void:
+	var ci = UserMessagingPlatform.consent_information
+	if ci.get_is_consent_form_available():
+		UserMessagingPlatform.load_consent_form(_on_consent_form_loaded, _on_consent_form_failed)
+	else:
+		_init_sdk()
+
+
+func _on_consent_info_failed(_error = null) -> void:
+	_init_sdk()
+
+
+func _on_consent_form_loaded(form: ConsentForm) -> void:
+	var ci = UserMessagingPlatform.consent_information
+	if ci.get_consent_status() == UserMessagingPlatform.consent_information.ConsentStatus.REQUIRED:
+		form.show(_on_consent_form_dismissed)
+	else:
+		_init_sdk()
+
+
+func _on_consent_form_failed(_error = null) -> void:
+	_init_sdk()
+
+
+func _on_consent_form_dismissed(_error = null) -> void:
+	_init_sdk()
+
+
+func privacy_options_required() -> bool:
+	var ci = UserMessagingPlatform.consent_information
+	if not _sdk_started or not ci.has_method("get_privacy_options_requirement_status"):
+		return false
+	return int(ci.get_privacy_options_requirement_status()) == 2   # 2 = REQUIRED
+
+
+func show_privacy_options(on_done: Callable) -> void:
+	_privacy_done = on_done
+	UserMessagingPlatform.show_privacy_options_form(_on_privacy_dismissed)
+
+
+func _on_privacy_dismissed(_error = null) -> void:
+	if _privacy_done.is_valid():
+		_privacy_done.call_deferred()
+
+
+# --- SDK start -----------------------------------------------------------------
+
+func _init_sdk() -> void:
+	if _sdk_started:
+		return
+	_sdk_started = true
+	var listener := OnInitializationCompleteListener.new()
+	listener.set("on_initialization_complete", _on_sdk_initialized)
+	MobileAds.initialize(listener)
+	_after(6.0, _on_sdk_initialized)   # in case the listener never fires
+
+
+func _on_sdk_initialized(_status = null) -> void:
+	if _sdk_ready:
+		return
+	_sdk_ready = true
+	_load_app_open()
+	_load_interstitial()
+	_load_rewarded()
+
+
+# --- loading -------------------------------------------------------------------
+
+func _load_app_open() -> void:
+	AppOpenAdLoader.new().load(str(_ids["app_open"]), AdRequest.new(), _app_open_load_cb)
+
+
+func _load_interstitial() -> void:
+	InterstitialAdLoader.new().load(str(_ids["interstitial"]), AdRequest.new(), _interstitial_load_cb)
+
+
+func _load_rewarded() -> void:
+	RewardedAdLoader.new().load(str(_ids["rewarded"]), AdRequest.new(), _rewarded_load_cb)
+
+
+func _on_app_open_loaded(ad: AppOpenAd) -> void:
+	_app_open = ad
+
+
+func _on_interstitial_loaded(ad: InterstitialAd) -> void:
+	_interstitial = ad
+
+
+func _on_rewarded_loaded(ad: RewardedAd) -> void:
+	_rewarded = ad
+
+
+func _on_app_open_load_failed(error: LoadAdError) -> void:
+	_app_open_failed = true
+	push_warning("App Open ad failed to load: " + str(error.message))
+
+
+func _on_interstitial_load_failed(error: LoadAdError) -> void:
+	push_warning("Interstitial failed to load: " + str(error.message))
+	_after(30.0, _load_interstitial)
+
+
+func _on_rewarded_load_failed(error: LoadAdError) -> void:
+	push_warning("Rewarded failed to load: " + str(error.message))
+	_after(30.0, _load_rewarded)
+
+
+# --- state used by AdService ----------------------------------------------------
+
+func is_app_open_ready() -> bool:
+	return _app_open != null
+
+
+func app_open_failed() -> bool:
+	return _app_open_failed
+
+
+func is_interstitial_ready() -> bool:
+	return _interstitial != null
+
+
+func is_rewarded_ready() -> bool:
+	return _rewarded != null
+
+
+# --- showing -------------------------------------------------------------------
+
+func show_app_open(on_closed: Callable) -> void:
+	if _app_open == null:
+		on_closed.call()
+		return
+	var ad := _app_open
+	_app_open = null
+	_begin_show(ad, "app_open", on_closed)
+	ad.show()
+
+
+func show_interstitial(on_closed: Callable) -> void:
+	if _interstitial == null:
+		on_closed.call()
+		return
+	var ad := _interstitial
+	_interstitial = null
+	_begin_show(ad, "interstitial", on_closed)
+	ad.show()
+
+
+func show_rewarded(on_reward: Callable, on_closed: Callable) -> void:
+	if _rewarded == null:
+		on_closed.call()
+		return
+	var ad := _rewarded
+	_rewarded = null
+	_on_reward = on_reward
+	_begin_show(ad, "rewarded", on_closed)
+	var listener := OnUserEarnedRewardListener.new()
+	listener.set("on_user_earned_reward", _on_reward_earned)
+	ad.show(listener)
+
+
+func _begin_show(ad, kind: String, on_closed: Callable) -> void:
+	_showing = ad
+	_showing_kind = kind
+	_on_closed = on_closed
+	var cb := FullScreenContentCallback.new()
+	cb.on_ad_dismissed_full_screen_content = _on_ad_dismissed
+	cb.on_ad_failed_to_show_full_screen_content = _on_ad_failed_to_show
+	ad.full_screen_content_callback = cb
+
+
+func _on_reward_earned(_item = null) -> void:
+	if _on_reward.is_valid():
+		_on_reward.call_deferred()
+
+
+func _on_ad_dismissed() -> void:
+	_finish_show()
+
+
+func _on_ad_failed_to_show(_error = null) -> void:
+	_finish_show()
+
+
+func _finish_show() -> void:
+	var kind := _showing_kind
+	var cb: Callable = _on_closed
+	if _showing != null and _showing.has_method("destroy"):
+		_showing.destroy()
+	_showing = null
+	_showing_kind = ""
+	_on_closed = Callable()
+	match kind:
+		"interstitial":
+			_after(1.0, _load_interstitial)
+		"rewarded":
+			_after(1.0, _load_rewarded)
+	if cb.is_valid():
+		cb.call_deferred()
+
+
+func _after(seconds: float, callable: Callable) -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null:
+		tree.create_timer(seconds).timeout.connect(callable)

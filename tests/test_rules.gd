@@ -102,6 +102,37 @@ func _init() -> void:
 	check(look["pattern"] == 3, "preview override applies the previewed pattern")
 	check(gs.get_look()["pattern"] == 0, "preview does not change the equipped look")
 
+	# --- fish species, coins, ads config (v1.2) ---
+	var sp_items: Array = gs.items_in("species")
+	check(sp_items.size() == 17, "17 fish species in the shop")
+	var prices_ok := int(sp_items[0]["price"]) == 0
+	for i in range(1, sp_items.size()):
+		if int(sp_items[i]["price"]) <= int(sp_items[i - 1]["price"]):
+			prices_ok = false
+	check(prices_ok, "first fish is free and prices rise from the smallest fish to the golden whale")
+	check(gs.is_owned("sp_goldie") and gs.equipped["species"] == "sp_goldie", "starter fish is owned and equipped")
+	var orca: Dictionary = gs.get_item("sp_orca")
+	check(gs.get_look("sp_orca")["body"] == orca["body"], "the 'Natural' skin uses the fish's own colours")
+	check(gs.get_look("sp_whale")["spec"].get("spout", false) == true, "baby whale has its water spout")
+	check(gs.get_look("sp_koi")["pattern"] == 2, "koi has a natural spotted pattern")
+	check(gs.get_look("skin_ruby")["body"] == gs.get_item("skin_ruby")["body"], "a bought skin overrides the natural colours")
+	check(maxi(1, int(round(8.0 * gs.COIN_PER_SIZE))) >= 1, "even the smallest fish gives at least 1 coin")
+	check(int(round(100.0 * gs.COIN_PER_SIZE)) >= 10, "a big predator gives 10+ coins")
+	var total_price := 0
+	for it in gs.shop_items:
+		total_price += int(it["price"])
+	check(total_price >= 150000, "there is a lot to buy (150,000+ coins of items) to keep players engaged")
+	var ac = load("res://scripts/ad_config.gd").new()
+	var ad_ids: Dictionary = ac.ids()
+	var ids_ok := true
+	for key in ["app_open", "interstitial", "rewarded"]:
+		if not str(ad_ids[key]).begins_with("ca-app-pub-"):
+			ids_ok = false
+	check(ids_ok, "all three ad unit ids look valid")
+	check(ac.INTERSTITIAL_MIN_GAP_SEC >= 30 and ac.INTERSTITIAL_EVERY_N_WINS >= 1, "between-level ads have a minimum gap")
+	check(ac.STARTUP_AD_FROM_LAUNCH >= 2, "the startup ad is skipped on the first launches")
+	check(ac.free_coins(300) > ac.free_coins(1), "free-coins reward grows with progress")
+
 	gs.free()
 	print("---- ", "ALL PASSED" if failures == 0 else "%d FAILED" % failures)
 	quit(1 if failures > 0 else 0)

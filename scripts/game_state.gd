@@ -28,6 +28,7 @@ const DANGER_RATIO := 1.15  # fish bigger than (your size * 1.15) can eat you
 const GROW_FACTOR := 0.25   # you gain this fraction of an eaten fish's size (big, visible growth)
 
 # --- Coins -------------------------------------------------------------------
+const COIN_PER_SIZE := 0.15   # coins you get for eating a fish = its size x this (small fish ~2 coins, big predators ~12)
 const COIN_GROUPS_PER_KM := 1.0   # groups of 5 coins per 1000 px of level (levels are long now, so fewer per km)
 
 var unlocked_level: int = 1
@@ -36,21 +37,40 @@ var music_on: bool = true
 var sfx_on: bool = true
 var tutorial_seen: bool = false
 var best_scores: Dictionary = {}   # level (int) -> best score (int)
+var launch_count: int = 0         # how many times the game was started (the startup ad is skipped on the first launches)
 var autosave: bool = true          # tests switch this off so they never touch your save file
 
 # --- Shop / cosmetics ---------------------------------------------------------
 var coins: int = 0
-var owned_items: Array = ["skin_goldie", "pat_none", "trail_bubbles", "acc_none"]
-var equipped: Dictionary = {"skin": "skin_goldie", "pattern": "pat_none", "trail": "trail_bubbles", "acc": "acc_none"}
+var owned_items: Array = ["sp_goldie", "skin_goldie", "pat_none", "trail_bubbles", "acc_none"]
+var equipped: Dictionary = {"species": "sp_goldie", "skin": "skin_goldie", "pattern": "pat_none", "trail": "trail_bubbles", "acc": "acc_none"}
 
-const CATEGORY_NAMES := {"skin": "Skins", "pattern": "Patterns", "trail": "Trails", "acc": "Extras"}
-const CATEGORY_ORDER := ["skin", "pattern", "trail", "acc"]
+const CATEGORY_NAMES := {"species": "Fish", "skin": "Skins", "pattern": "Patterns", "trail": "Trails", "acc": "Extras"}
+const CATEGORY_ORDER := ["species", "skin", "pattern", "trail", "acc"]
 
 ## Every shop item. Add your own here - the shop screen builds itself from this list.
+## species: a different fish body (shape + natural colours). "spec" describes the shape, see fish_art.gd (draw_fish) for the keys.
 ## skin: body/belly/fin colours (rainbow = cycles colour)   pattern: 0 none 1 stripes 2 spots 3 scales 4 gold scales
 ## trail: bubble colour (filled = sparkle dots instead of bubble rings)   acc: 0 none 1 sunglasses 2 crown
 var shop_items: Array = [
-	{"id": "skin_goldie", "cat": "skin", "name": "Goldie", "price": 0, "body": Color("#ffa534"), "belly": Color("#ffe08a"), "fin": Color("#e0661d")},
+	{"id": "sp_goldie", "cat": "species", "name": "Goldie", "price": 0, "body": Color("#ffa534"), "belly": Color("#ffe08a"), "fin": Color("#e0661d"), "spec": {}},
+	{"id": "sp_guppy", "cat": "species", "name": "Guppy", "price": 400, "body": Color("#4fd0d0"), "belly": Color("#c9fff6"), "fin": Color("#ff7ac8"), "spec": {"base": 1, "by": 0.42, "tail": "fan"}},
+	{"id": "sp_clown", "cat": "species", "name": "Clownfish", "price": 700, "body": Color("#ff7a1a"), "belly": Color("#ffb066"), "fin": Color("#d94d00"), "spec": {"bands": true}},
+	{"id": "sp_puffer", "cat": "species", "name": "Pufferfish", "price": 1000, "body": Color("#e8d14a"), "belly": Color("#fff6b8"), "fin": Color("#b89a1a"), "spec": {"base": 2}},
+	{"id": "sp_angel", "cat": "species", "name": "Angelfish", "price": 1500, "body": Color("#cfe8ff"), "belly": Color("#ffffff"), "fin": Color("#5b8fd6"), "spec": {"bx": 0.8, "by": 0.92, "dorsal": "tall", "anal": true, "tail": "fan"}},
+	{"id": "sp_koi", "cat": "species", "name": "Koi", "price": 2200, "body": Color("#ff5a3c"), "belly": Color("#fff2e8"), "fin": Color("#ffffff"), "spec": {"base": 1, "bx": 1.15, "by": 0.5, "tail": "fan", "pattern": 2}},
+	{"id": "sp_ray", "cat": "species", "name": "Stingray", "price": 3000, "body": Color("#6f86a3"), "belly": Color("#dfe8f2"), "fin": Color("#4f6278"), "spec": {"base": 4, "bx": 1.0, "by": 0.85, "tail": "whip", "dorsal": "none"}},
+	{"id": "sp_sword", "cat": "species", "name": "Swordfish", "price": 4000, "body": Color("#4a78c8"), "belly": Color("#dce8ff"), "fin": Color("#2a4a90"), "spec": {"base": 1, "bx": 1.2, "by": 0.36, "nose": "bill", "dorsal": "sail", "tail": "crescent"}},
+	{"id": "sp_piranha", "cat": "species", "name": "Piranha", "price": 5000, "body": Color("#7d8c99"), "belly": Color("#e0483c"), "fin": Color("#c43a2a"), "spec": {"by": 0.72, "teeth": true, "angry": true}},
+	{"id": "sp_angler", "cat": "species", "name": "Anglerfish", "price": 6500, "body": Color("#3a2f5a"), "belly": Color("#6a5a9a"), "fin": Color("#231a3d"), "spec": {"by": 0.78, "nose": "lure", "teeth": true, "eye": 1.25}},
+	{"id": "sp_dolphin", "cat": "species", "name": "Dolphin", "price": 9000, "body": Color("#6fa0d8"), "belly": Color("#eef6ff"), "fin": Color("#3a62a0"), "spec": {"base": 1, "bx": 1.3, "by": 0.46, "nose": "beak", "dorsal": "hook", "tail": "fluke"}},
+	{"id": "sp_shark", "cat": "species", "name": "Shark", "price": 12000, "body": Color("#7f95a8"), "belly": Color("#eef2f5"), "fin": Color("#566a7c"), "spec": {"base": 3}},
+	{"id": "sp_hammer", "cat": "species", "name": "Hammerhead", "price": 16000, "body": Color("#8a8f7a"), "belly": Color("#eef0e6"), "fin": Color("#5d6150"), "spec": {"base": 3, "nose": "hammer"}},
+	{"id": "sp_orca", "cat": "species", "name": "Orca", "price": 22000, "body": Color("#1e2330"), "belly": Color("#ffffff"), "fin": Color("#12151f"), "spec": {"base": 1, "bx": 1.35, "by": 0.56, "dorsal": "tall", "tail": "fluke", "patch": true, "fin_scale": 1.4}},
+	{"id": "sp_narwhal", "cat": "species", "name": "Narwhal", "price": 30000, "body": Color("#8fb0c8"), "belly": Color("#f2f6fa"), "fin": Color("#46657f"), "spec": {"base": 1, "bx": 1.25, "by": 0.5, "nose": "tusk", "tail": "fluke", "dorsal": "none", "pattern": 2}},
+	{"id": "sp_whale", "cat": "species", "name": "Baby Whale", "price": 40000, "body": Color("#4f8fe0"), "belly": Color("#e8f3ff"), "fin": Color("#2f62b0"), "spec": {"bx": 1.4, "by": 0.74, "tail": "fluke", "dorsal": "none", "spout": true, "eye": 1.3}},
+	{"id": "sp_goldwhale", "cat": "species", "name": "Golden Whale", "price": 75000, "body": Color("#ffcf3a"), "belly": Color("#fff3b8"), "fin": Color("#d9961a"), "spec": {"bx": 1.4, "by": 0.74, "tail": "fluke", "dorsal": "none", "spout": true, "eye": 1.3, "pattern": 4}},
+	{"id": "skin_goldie", "cat": "skin", "name": "Natural", "price": 0, "body": Color("#ffa534"), "belly": Color("#ffe08a"), "fin": Color("#e0661d")},
 	{"id": "skin_bubblegum", "cat": "skin", "name": "Bubblegum", "price": 150, "body": Color("#ff8ac8"), "belly": Color("#ffd6ec"), "fin": Color("#d6489a")},
 	{"id": "skin_ocean", "cat": "skin", "name": "Ocean Blue", "price": 150, "body": Color("#3da5ff"), "belly": Color("#bfe3ff"), "fin": Color("#1c6fc4")},
 	{"id": "skin_lime", "cat": "skin", "name": "Lime Zest", "price": 200, "body": Color("#8be04a"), "belly": Color("#e2ffb8"), "fin": Color("#4c9f1f")},
@@ -93,6 +113,8 @@ var _themes_extended := false
 func _ready() -> void:
 	_ensure_themes()
 	load_game()
+	launch_count += 1   # counts every start of the game
+	save_game()
 
 
 ## Returns the visual theme dictionary for a level (10 levels per theme).
@@ -222,16 +244,26 @@ func get_look(override_id: String = "") -> Dictionary:
 		var o := get_item(override_id)
 		if not o.is_empty():
 			ids[o["cat"]] = override_id
+	var sp := get_item(str(ids["species"]))
 	var skin := get_item(str(ids["skin"]))
 	var pat := get_item(str(ids["pattern"]))
 	var trail := get_item(str(ids["trail"]))
 	var acc := get_item(str(ids["acc"]))
+	var spec: Dictionary = sp.get("spec", {})
+	# The skin called "Natural" (id skin_goldie) means: use the fish's own colours.
+	var natural: bool = str(ids["skin"]) == "skin_goldie"
+	var colors: Dictionary = sp if natural else skin
+	var pattern: int = int(pat.get("pattern", 0))
+	if pattern == 0:
+		pattern = int(spec.get("pattern", 0))   # some fish (Koi, Narwhal, Golden Whale) have a natural pattern
 	return {
-		"body": skin.get("body", Color("#ffa534")),
-		"belly": skin.get("belly", Color("#ffe08a")),
-		"fin": skin.get("fin", Color("#e0661d")),
-		"rainbow": skin.get("rainbow", false),
-		"pattern": pat.get("pattern", 0),
+		"species": str(ids["species"]),
+		"spec": spec,
+		"body": colors.get("body", Color("#ffa534")),
+		"belly": colors.get("belly", Color("#ffe08a")),
+		"fin": colors.get("fin", Color("#e0661d")),
+		"rainbow": (not natural) and bool(skin.get("rainbow", false)),
+		"pattern": pattern,
 		"acc": acc.get("acc", 0),
 		"trail_color": trail.get("color", Color.WHITE),
 		"trail_filled": trail.get("filled", false),
@@ -262,6 +294,7 @@ func save_game() -> void:
 	cf.set_value("settings", "tutorial_seen", tutorial_seen)
 	for k in best_scores:
 		cf.set_value("scores", str(k), best_scores[k])
+	cf.set_value("stats", "launch_count", launch_count)
 	cf.set_value("shop", "coins", coins)
 	cf.set_value("shop", "owned", owned_items)
 	for cat in equipped:
@@ -281,6 +314,7 @@ func load_game() -> void:
 	if cf.has_section("scores"):
 		for key in cf.get_section_keys("scores"):
 			best_scores[int(key)] = int(cf.get_value("scores", key, 0))
+	launch_count = maxi(0, int(cf.get_value("stats", "launch_count", 0)))
 	coins = maxi(0, int(cf.get_value("shop", "coins", 0)))
 	var saved_owned: Array = cf.get_value("shop", "owned", owned_items)
 	for sid in saved_owned:
