@@ -81,6 +81,36 @@ jobs:
           printf "%s" "${GODOT_VERSION}.stable" > android/.build_version
           touch android/build/.gdignore
 
+      # Ads are optional. If you add the AdMob plugin (see ADS_GUIDE.md) this step switches the build to "with ads".
+      - name: Configure build for ads (only if the AdMob plugin is in the repository)
+        run: |
+          if [ ! -f addons/admob/plugin.cfg ]; then
+            echo "No AdMob plugin in this repository - building WITHOUT ads."
+            exit 0
+          fi
+          echo "AdMob plugin found - building WITH ads."
+          if ! grep -q 'res://addons/admob/plugin.cfg' project.godot; then
+            echo "::error::The AdMob plugin is in addons/ but is not ENABLED. In Godot: Project > Project Settings > Plugins > tick AdMob, then upload the changed project.godot."
+            exit 1
+          fi
+          cp -f ads/admob_backend.gd.txt scripts/admob_backend.gd
+          # ads need internet, and the plugin needs a Gradle build for BOTH the APK and the AAB
+          sed -i 's/^permissions\/internet=false/permissions\/internet=true/; s/^permissions\/access_network_state=false/permissions\/access_network_state=true/' export_presets.cfg
+          sed -i '0,/^gradle_build\/use_gradle_build=false/s//gradle_build\/use_gradle_build=true/' export_presets.cfg
+          echo "AdMob lines in project.godot (your App ID is set in Project Settings > General > AdMob):"
+          grep -n -i "admob\|app_id" project.godot || echo "::warning::No AdMob settings found in project.godot. Set the Android App ID in Project Settings."
+          # Safety net for real releases (tags like v1.2.0): no test ads, no test App ID
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            if grep -q 'USE_TEST_ADS := true' scripts/ad_config.gd; then
+              echo "::error::scripts/ad_config.gd still has USE_TEST_ADS := true. Put your real ad unit ids there and set it to false before a release."
+              exit 1
+            fi
+            if grep -q '3940256099942544~3347511713' project.godot; then
+              echo "::error::project.godot still contains Google's TEST App ID. Put your real AdMob App ID in Project Settings > AdMob."
+              exit 1
+            fi
+          fi
+
       - name: Import project
         run: godot --headless --path . --import || true
 
