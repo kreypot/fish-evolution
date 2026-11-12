@@ -152,45 +152,6 @@ func _build_about() -> void:
 	var back := UITheme.button("Back", _show_menu, 320.0, 70.0)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	vb.add_child(back)
-	_help_panel = _centered(panel)
-	_help_panel.visible = false
-
-
-func _build_settings() -> void:
-	var panel := PanelContainer.new()
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 16)
-	panel.add_child(vb)
-	vb.add_child(UITheme.label("Settings", 52, Color("#ffd23a")))
-	_music_btn = UITheme.button("", _on_toggle_music, 420.0, 72.0)
-	_sfx_btn = UITheme.button("", _on_toggle_sfx, 420.0, 72.0)
-	_reset_btn = UITheme.button("Reset Level Progress", _on_reset, 420.0, 72.0)
-	var back := UITheme.button("Back", _show_menu, 420.0, 72.0)
-	_privacy_btn = UITheme.button("Ad Privacy Settings", _on_privacy_settings, 420.0, 72.0)
-	_privacy_btn.visible = false
-	for b in [_music_btn, _sfx_btn, _reset_btn, _privacy_btn, back]:
-		var bb: Button = b
-		bb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		vb.add_child(bb)
-	_settings_panel = _centered(panel)
-	_settings_panel.visible = false
-	_refresh_settings()
-
-
-func _build_about() -> void:
-	var panel := PanelContainer.new()
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 14)
-	panel.add_child(vb)
-	vb.add_child(UITheme.label("About", 52, Color("#ffd23a")))
-	var text := "Fish Evolution: Ocean Run  v1.1.0\n\nEat smaller fish to grow, dodge bigger predators, avoid jellyfish and reach the finish wall. 300 levels across 30 underwater worlds.\n\nPrivacy: this game collects no information from your device. It has no ads, no analytics, no accounts, needs no internet and asks for no permissions. Your progress is saved only on your phone.\n\nMade with the Godot Engine (MIT licence). All art and sound are generated in code."
-	var l := UITheme.label(text, 24)
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(760, 0)
-	vb.add_child(l)
-	var back := UITheme.button("Back", _show_menu, 320.0, 70.0)
-	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vb.add_child(back)
 	_about_panel = _centered(panel)
 	_about_panel.visible = false
 
