@@ -21,19 +21,20 @@ jobs:
 
       - name: Check that every project file was uploaded
         run: |
+          if [ ! -f tools/required_files.txt ]; then
+            echo "::error::tools/required_files.txt is missing. Upload the 'tools' folder of the update."
+            exit 1
+          fi
           missing=0
-          for f in project.godot export_presets.cfg icon.svg \
-            scenes/main_menu.tscn scenes/level_select.tscn scenes/shop.tscn scenes/game.tscn \
-            assets/icon_192.png assets/icon_fg_432.png assets/icon_bg_432.png \
-            scripts/audio_manager.gd scripts/background.gd scripts/coin.gd scripts/decor_chunk.gd \
-            scripts/finish_gate.gd scripts/fish.gd scripts/fish_art.gd scripts/fish_preview.gd scripts/fx.gd \
-            scripts/game.gd scripts/game_state.gd scripts/hud.gd scripts/jellyfish.gd scripts/joystick.gd \
-            scripts/level_select.gd scripts/main_menu.gd scripts/menu_bg.gd scripts/player.gd scripts/shop.gd \
-            scripts/ui_theme.gd; do
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
             if [ ! -f "$f" ]; then echo "::error::MISSING FILE in your repository: $f"; missing=1; fi
-          done
-          if [ $missing = 1 ]; then echo "Upload the missing files (keep the folder names) and run the workflow again."; exit 1; fi
-          echo "All project files are present."
+          done < tools/required_files.txt
+          if [ $missing = 1 ]; then
+            echo "Upload the missing files (keep the folder names) and run the workflow again."
+            exit 1
+          fi
+          echo "All $(wc -l < tools/required_files.txt) required files are present."
 
       - uses: actions/setup-java@v4
         with:
@@ -114,9 +115,16 @@ jobs:
       - name: Import project
         run: godot --headless --path . --import || true
 
-      - name: Run rule tests and smoke test (informational)
-        continue-on-error: true
+      - name: Smoke test (starts every screen without a display and STOPS the build if the game has script errors)
         run: bash ./tools/smoke_test.sh
+
+      - name: Keep the smoke test log (download it from the run page if something fails)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-log
+          path: build/smoke.log
+          if-no-files-found: ignore
 
       # We do not let Godot sign (its keystore check is picky). Godot builds UNSIGNED files and the next
       # steps sign them with standard Java/Android tools using your key.
