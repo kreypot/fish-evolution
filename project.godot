@@ -27,6 +27,7 @@ config/icon="res://icon.svg"
 
 GameState="*res://scripts/game_state.gd"
 AudioManager="*res://scripts/audio_manager.gd"
+AdService="*res://scripts/ad_service.gd"
 
 [display]
 
