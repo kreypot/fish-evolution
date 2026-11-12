@@ -5,12 +5,12 @@ extends RefCounted
 ## While USE_TEST_ADS is true the game shows Google's official TEST ads (safe to click, they pay nothing).
 ## NEVER tap your own real ads: AdMob can ban your account for that.
 
-const USE_TEST_ADS := true
+const USE_TEST_ADS := false
 
 # Your real ad unit ids: AdMob console > Apps > your app > Ad units. They look like ca-app-pub-1234567890123456/1234567890
-const REAL_APP_OPEN := "ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX"
-const REAL_INTERSTITIAL := "ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX"
-const REAL_REWARDED := "ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX"
+const REAL_APP_OPEN := "ca-app-pub-8678055881287786/1254526784"
+const REAL_INTERSTITIAL := "ca-app-pub-8678055881287786/6518315965"
+const REAL_REWARDED := "ca-app-pub-8678055881287786/3892152626"
 
 # Google's public test ids (Android)
 const TEST_APP_OPEN := "ca-app-pub-3940256099942544/9257395921"
