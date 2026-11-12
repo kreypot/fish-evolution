@@ -1,20 +1,32 @@
-; Engine configuration file for Fish Evolution: Ocean Run (Godot 4.3)
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
 config_version=5
+
+[admob]
+
+general/android/app_id="ca-app-pub-8678055881287786~3818884446"
+general/android/enable_r8_optimization=true
+general/ios/app_id="app-id= ca-app-pub-8678055881287786~3818884446"
 
 [application]
 
 config/name="Fish Evolution: Ocean Run"
 config/description="Eat smaller fish, dodge bigger ones, reach the finish gate. 100 levels, fully offline."
-run/main_scene="res://scenes/splash.tscn"
-config/features=PackedStringArray("4.7", "GL Compatibility")
+run/main_scene="res://scenes/main_menu.tscn"
 config/quit_on_go_back=false
+config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
 
 GameState="*res://scripts/game_state.gd"
 AudioManager="*res://scripts/audio_manager.gd"
-AdService="*res://scripts/ad_service.gd"
 
 [display]
 
@@ -24,10 +36,9 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=4
 
-[input_devices]
+[editor_plugins]
 
-pointing/emulate_touch_from_mouse=false
-pointing/emulate_mouse_from_touch=true
+enabled=PackedStringArray("res://addons/admob/plugin.cfg")
 
 [rendering]
 
