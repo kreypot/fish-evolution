@@ -72,6 +72,8 @@ func _apply_music_state() -> void:
 func _build_sfx() -> void:
 	_sfx["click"] = _wav(_tone(700.0, 900.0, 0.06, 0.35))
 	_sfx["coin"] = _wav(_seq([987.77, 1318.5], 0.07, 0.35))
+	_sfx["tick"] = _wav(_tone(1500.0, 1900.0, 0.04, 0.3))
+	_sfx["kaching"] = _wav(_seq([1046.5, 1318.5, 1568.0, 2093.0], 0.07, 0.4))
 	_sfx["chomp"] = _wav(_chomp())
 	_sfx["swim"] = _wav(_tone(260.0, 170.0, 0.10, 0.25))
 	_sfx["eat"] = _wav(_tone(420.0, 880.0, 0.14, 0.5))

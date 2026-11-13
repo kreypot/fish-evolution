@@ -5,6 +5,7 @@ extends Control
 const UITheme = preload("res://scripts/ui_theme.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
 const ScrollMenu = preload("res://scripts/scroll_menu.gd")
+const CoinCounter = preload("res://scripts/coin_counter.gd")
 
 var _menu_box: Control
 var _settings_panel: Control
@@ -21,6 +22,7 @@ var _hand_btn: Button
 var _joy_btn: Button
 var _quality_btn: Button
 var _list                # the scrolling main list
+var _coins_shown := 0    # the coin number currently shown (the count-up starts from it)
 var _missions_panel: Control
 var _missions_vb: VBoxContainer
 var _stats_panel: Control
@@ -35,7 +37,9 @@ var _reset_armed := false
 
 func _ready() -> void:
 	theme = UITheme.make()
-	add_child(MenuBg.new())
+	var bg = MenuBg.new()
+	bg.show_hero = true   # your fish floats large on the left
+	add_child(bg)
 	_build_main()
 	_build_settings()
 	_build_about()
@@ -73,13 +77,14 @@ func _build_main() -> void:
 	var left := VBoxContainer.new()
 	left.add_theme_constant_override("separation", 12)
 	left.custom_minimum_size = Vector2(560, 0)
-	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	left.alignment = BoxContainer.ALIGNMENT_BEGIN
 	var title := UITheme.label("Fish Evolution", 84, Color("#ffd23a"))
 	title.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	title.add_theme_constant_override("outline_size", 14)
 	var sub := UITheme.label("Ocean Run", 48, Color.WHITE)
 	sub.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	sub.add_theme_constant_override("outline_size", 10)
+	_coins_shown = GameState.coins
 	_coins_label = UITheme.label("Coins: %d" % GameState.coins, 32, Color("#ffd23a"))
 	_coins_label.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	_coins_label.add_theme_constant_override("outline_size", 8)
@@ -88,20 +93,24 @@ func _build_main() -> void:
 	left.add_child(sub)
 	left.add_child(_coins_label)
 	left.add_child(_hint_label)
+	var hero_space := Control.new()   # empty room under the title: the backdrop draws your fish here
+	hero_space.custom_minimum_size = Vector2(0, 270)
+	hero_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_child(hero_space)
 	row.add_child(left)
 
 	var list := ScrollMenu.new()
 	list.custom_minimum_size = Vector2(480, 470)
 	list.scrolled_first_time.connect(_on_first_scroll)
 	var play_text := "Play" if GameState.unlocked_level == 1 else "Continue (Level %d)" % GameState.unlocked_level
-	list.add_item(play_text, _on_play)
+	list.add_item(play_text, _on_play, Color("#2fae5a"))
 	list.add_item("Level Selection", _on_levels)
-	list.add_item("Fish Shop", _on_shop)
-	list.add_item(_daily_text(), _on_daily)   # must stay the 4th item (index 3, see _daily_index)
+	list.add_item("Fish Shop", _on_shop, Color("#f08a1c"))
+	list.add_item(_daily_text(), _on_daily, _daily_color())   # must stay the 4th item (index 3, see _daily_index)
 	list.add_item("Daily Missions", _on_missions)
 	list.add_item("Stats & Achievements", _on_stats)
 	if AdService.enabled:
-		list.add_item("Free Coins (watch ad)", _on_free_coins)
+		list.add_item("Free Coins (watch ad)", _on_free_coins, Color("#8a5ae0"))
 	list.add_item("How to Play", _on_help)
 	list.add_item("Settings", _on_settings)
 	list.add_item("About", _on_about)
@@ -239,7 +248,7 @@ func _on_claim_mission(i: int) -> void:
 	var gain: int = GameState.claim_mission(i)
 	if gain > 0:
 		AudioManager.play_sfx("coin")
-		_coins_label.text = "Coins: %d" % GameState.coins
+		_animate_coins()
 		_toast("+%d coins!" % gain)
 	_refresh_missions()
 
@@ -298,7 +307,7 @@ func _on_stats() -> void:
 		var reward_total: int = 0
 		for a in got:
 			reward_total += int(a["reward"])
-		_coins_label.text = "Coins: %d" % GameState.coins
+		_animate_coins()
 		_toast("Achievement unlocked!  +%d coins" % reward_total)
 	_stats_page = 0
 	_refresh_stats()
@@ -360,7 +369,7 @@ func _on_free_coins() -> void:
 
 
 func _on_coins_granted() -> void:
-	_coins_label.text = "Coins: %d" % GameState.coins
+	_animate_coins()
 	_toast("+%d coins!" % AdService.free_coins_amount())
 
 
@@ -425,6 +434,25 @@ func _on_toggle_quality() -> void:
 	_refresh_settings()
 
 
+## The coin number counts up with a tick sound for every step and a "ka-ching" at the end.
+func _animate_coins() -> void:
+	var from_val: int = _coins_shown
+	_coins_shown = GameState.coins
+	var cc := CoinCounter.new()
+	add_child(cc)
+	cc.run(_coins_label, from_val, _coins_shown, _coins_text)
+
+
+func _coins_text(v: int) -> String:
+	return "Coins: %d" % v
+
+
+func _daily_color() -> Color:
+	if GameState.daily_can_claim():
+		return Color("#e3a516")   # gold while the reward is waiting
+	return Color(0, 0, 0, 0)
+
+
 ## Daily reward item in the main list.
 func _daily_text() -> String:
 	if GameState.daily_can_claim():
@@ -437,8 +465,9 @@ func _on_daily() -> void:
 		var day: int = GameState.daily_next_streak()
 		var gain: int = GameState.claim_daily()
 		AudioManager.play_sfx("coin")
-		_coins_label.text = "Coins: %d" % GameState.coins
+		_animate_coins()
 		_list.set_item_text(_daily_index, _daily_text())
+		_list.set_item_color(_daily_index, _daily_color())
 		_toast("Day %d reward: +%d coins!" % [day, gain])
 	else:
 		var next_day: int = GameState.daily_streak + 1

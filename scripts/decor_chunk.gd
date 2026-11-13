@@ -62,14 +62,28 @@ func _draw() -> void:
 	poly.append(Vector2(x0, 1200.0))
 	draw_colored_polygon(poly, sand)
 	draw_polyline(floor_pts, sand.lightened(0.25), 6.0)
+	# a darker layer of sand below, and a few pebbles
+	var deep := PackedVector2Array()
+	for fp in floor_pts:
+		deep.append(fp + Vector2(0.0, 70.0))
+	deep.append(Vector2(x0 + width, 1200.0))
+	deep.append(Vector2(x0, 1200.0))
+	draw_colored_polygon(deep, sand.darkened(0.14))
+	for pi in 5:
+		var px: float = x0 + 70.0 + float(pi) * 150.0 + 30.0 * sin(float(pi) * 2.7 + x0)
+		var py: float = floor_y(px) + 16.0 + 10.0 * float(pi % 3)
+		draw_circle(Vector2(px, py), 3.0 + float(pi % 3), sand.lightened(0.18))
 
 	# rocks
 	var rock_col: Color = theme_data["rock"]
 	for r in rocks:
 		var rv: Vector3 = r
 		draw_circle(Vector2(rv.x + rv.z * 0.7, rv.y + rv.z * 0.25), rv.z * 0.6, rock_col.darkened(0.1))
+		draw_circle(Vector2(rv.x, rv.y), rv.z * 1.05, rock_col.darkened(0.38))   # dark outline
 		draw_circle(Vector2(rv.x, rv.y), rv.z, rock_col)
-		draw_circle(Vector2(rv.x - rv.z * 0.25, rv.y - rv.z * 0.3), rv.z * 0.5, rock_col.lightened(0.15))
+		draw_circle(Vector2(rv.x + rv.z * 0.2, rv.y + rv.z * 0.25), rv.z * 0.66, rock_col.darkened(0.12))   # shadow side
+		draw_circle(Vector2(rv.x - rv.z * 0.25, rv.y - rv.z * 0.3), rv.z * 0.45, rock_col.lightened(0.18))
+		draw_circle(Vector2(rv.x - rv.z * 0.32, rv.y - rv.z * 0.38), rv.z * 0.18, rock_col.lightened(0.4))   # shine
 
 	# coral (static)
 	for c in _coral:
@@ -82,10 +96,15 @@ func _draw() -> void:
 			var ang: float = -PI * 0.5 + (float(b) - float(n - 1) * 0.5) * 0.5
 			var length: float = size * (0.75 + 0.15 * float((b * 7) % 3))
 			var tip: Vector2 = base + Vector2(cos(ang), sin(ang)) * length
+			var mid: Vector2 = base.lerp(tip, 0.6)
+			var side_tip: Vector2 = mid + Vector2(cos(ang + 0.7), sin(ang + 0.7)) * length * 0.35
+			var edge: Color = col.darkened(0.4)   # dark outline first, then the colour on top
+			draw_line(base, tip, edge, size * 0.28)
+			draw_line(mid, side_tip, edge, size * 0.18)
+			draw_circle(tip, size * 0.21, edge)
 			draw_line(base, tip, col, size * 0.18)
 			draw_circle(tip, size * 0.16, col.lightened(0.25))
-			var mid: Vector2 = base.lerp(tip, 0.6)
-			draw_line(mid, mid + Vector2(cos(ang + 0.7), sin(ang + 0.7)) * length * 0.35, col, size * 0.1)
+			draw_line(mid, side_tip, col, size * 0.1)
 
 	# kelp (sways)
 	var plant: Color = theme_data["plant"]
@@ -98,4 +117,6 @@ func _draw() -> void:
 		for j in 9:
 			var f: float = float(j) / 8.0
 			pts.append(Vector2(kx + sin(_time * 1.2 + kp + f * 2.5) * 18.0 * f, floor_y(kx) + 4.0 - kh * f))
+		draw_polyline(pts, plant.darkened(0.35), kt + 5.0, true)
 		draw_polyline(pts, plant, kt, true)
+		draw_polyline(pts, plant.lightened(0.25), maxf(2.0, kt * 0.35), true)

@@ -35,12 +35,33 @@ func _on_draw() -> void:
 	var vp: Vector2 = _canvas.get_viewport_rect().size
 	var top: Color = theme_data["top"]
 	var bottom: Color = theme_data["bottom"]
-	_canvas.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(vp.x, 0), Vector2(vp.x, vp.y), Vector2(0, vp.y)]), PackedColorArray([top, top, bottom, bottom]))
+	# three-colour water: lighter near the surface, deeper below
+	var mid: Color = top.lerp(bottom, 0.5)
+	var hh: float = vp.y * 0.5
+	var bright: Color = top.lightened(0.12)
+	_canvas.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(vp.x, 0), Vector2(vp.x, hh), Vector2(0, hh)]), PackedColorArray([bright, bright, mid, mid]))
+	_canvas.draw_polygon(PackedVector2Array([Vector2(0, hh), Vector2(vp.x, hh), Vector2(vp.x, vp.y), Vector2(0, vp.y)]), PackedColorArray([mid, mid, bottom, bottom]))
 
 	# light rays
 	for i in (0 if GameState.low_quality else 5):
 		var bx: float = vp.x * (float(i) + 0.5) / 5.0 + sin(_time * 0.25 + float(i) * 1.7) * 80.0 - fmod(cam.x * 0.03, 200.0)
-		_canvas.draw_colored_polygon(PackedVector2Array([Vector2(bx - 30, 0), Vector2(bx + 30, 0), Vector2(bx + 190, vp.y), Vector2(bx + 50, vp.y)]), Color(1, 1, 1, 0.05))
+		var ray_top := Color(1, 1, 1, 0.13)
+		var ray_bot := Color(1, 1, 1, 0.0)   # rays fade out as they go down
+		_canvas.draw_polygon(PackedVector2Array([Vector2(bx - 30, 0), Vector2(bx + 30, 0), Vector2(bx + 190, vp.y), Vector2(bx + 50, vp.y)]), PackedColorArray([ray_top, ray_top, ray_bot, ray_bot]))
+
+	# faint fish far away in the water (parallax)
+	if not GameState.low_quality:
+		for i in 6:
+			var fx: float = fposmod(float(i) * 311.0 - cam.x * 0.05 + _time * (8.0 + float(i) * 3.0), vp.x + 300.0) - 150.0
+			var fy: float = vp.y * (0.18 + 0.11 * float(i % 5)) + sin(_time * 0.8 + float(i)) * 10.0
+			var fs: float = 14.0 + float(i % 3) * 7.0
+			var sil := Color(1, 1, 1, 0.07)
+			var body := PackedVector2Array()
+			for q in 12:
+				var qa: float = TAU * float(q) / 12.0
+				body.append(Vector2(fx + cos(qa) * fs * 1.6, fy + sin(qa) * fs * 0.8))
+			_canvas.draw_colored_polygon(body, sil)
+			_canvas.draw_colored_polygon(PackedVector2Array([Vector2(fx - fs * 1.4, fy), Vector2(fx - fs * 2.4, fy - fs * 0.8), Vector2(fx - fs * 2.4, fy + fs * 0.8)]), sil)
 
 	# parallax hills (two layers)
 	for layer_i in 2:

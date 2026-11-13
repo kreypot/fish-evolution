@@ -1,5 +1,5 @@
 extends RefCounted
-## Shared look for all menus: rounded buttons, readable fonts, panels.
+## Shared look for all menus: chunky rounded buttons with a soft shadow, readable outlined text, clean panels.
 ## Usage: some_control.theme = UITheme.make()
 
 static func make() -> Theme:
@@ -10,25 +10,49 @@ static func make() -> Theme:
 	t.set_color("font_color", "Button", Color.WHITE)
 	t.set_color("font_hover_color", "Button", Color.WHITE)
 	t.set_color("font_pressed_color", "Button", Color.WHITE)
-	t.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.45))
+	t.set_color("font_disabled_color", "Button", Color(1, 1, 1, 0.5))
+	t.set_color("font_outline_color", "Button", Color(0.0, 0.12, 0.25, 0.85))
+	t.set_constant("outline_size", "Button", 6)
 	t.set_color("font_color", "Label", Color.WHITE)
 	t.set_stylebox("normal", "Button", _box(Color("#1fa2c9")))
 	t.set_stylebox("hover", "Button", _box(Color("#33b8e0")))
-	t.set_stylebox("pressed", "Button", _box(Color("#147a99")))
-	t.set_stylebox("disabled", "Button", _box(Color("#3a5568")))
+	t.set_stylebox("pressed", "Button", _box(Color("#147a99"), 22, 14, true, true))
+	t.set_stylebox("disabled", "Button", _box(Color("#3a5568"), 22, 14, true, true))
 	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
-	t.set_stylebox("panel", "PanelContainer", _box(Color(0.03, 0.15, 0.25, 0.94), 28, 32, false))
+	t.set_stylebox("panel", "PanelContainer", _panel_box())
 	return t
 
 
-static func _box(color: Color, radius: int = 20, margin: int = 14, border: bool = true) -> StyleBoxFlat:
+## A chunky "3D" button face: outline, thicker bottom edge and a soft shadow (flat and lower when pressed).
+static func _box(color: Color, radius: int = 22, margin: int = 14, border: bool = true, pressed: bool = false) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = color
 	sb.set_corner_radius_all(radius)
 	sb.set_content_margin_all(margin)
 	if border:
-		sb.border_width_bottom = 5
-		sb.border_color = color.darkened(0.3)
+		sb.set_border_width_all(3)
+		sb.border_width_bottom = 3 if pressed else 8
+		sb.border_color = color.darkened(0.35)
+		if pressed:
+			sb.content_margin_top = margin + 4
+		else:
+			sb.shadow_color = Color(0, 0, 0, 0.28)
+			sb.shadow_size = 5
+			sb.shadow_offset = Vector2(0, 4)
+	return sb
+
+
+## Dark glass panel with a light-blue edge and a soft shadow.
+static func _panel_box() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.15, 0.27, 0.95)
+	sb.set_corner_radius_all(30)
+	sb.set_content_margin_all(32)
+	sb.set_border_width_all(4)
+	sb.border_color = Color(0.25, 0.78, 0.94, 0.55)
+	sb.shadow_color = Color(0, 0, 0, 0.4)
+	sb.shadow_size = 16
+	sb.shadow_offset = Vector2(0, 6)
 	return sb
 
 
@@ -36,7 +60,7 @@ static func _box(color: Color, radius: int = 20, margin: int = 14, border: bool 
 static func selected_box() -> StyleBoxFlat:
 	var sb := _box(Color("#2a7fd6"))
 	sb.set_border_width_all(5)
-	sb.border_color = Color("#ffd23a")
+	sb.border_color = Color(1.0, 0.82, 0.23)
 	return sb
 
 

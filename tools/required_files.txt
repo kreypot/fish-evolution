@@ -16,6 +16,7 @@ scripts/audio_manager.gd
 scripts/background.gd
 scripts/checkpoint_flag.gd
 scripts/coin.gd
+scripts/coin_counter.gd
 scripts/decor_chunk.gd
 scripts/finish_gate.gd
 scripts/fish.gd

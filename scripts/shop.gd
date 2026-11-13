@@ -4,6 +4,7 @@ extends Control
 ## Items come from GameState.shop_items - add more there and they appear here.
 
 const UITheme = preload("res://scripts/ui_theme.gd")
+const CoinCounter = preload("res://scripts/coin_counter.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
 const FishPreview = preload("res://scripts/fish_preview.gd")
 const ITEMS_PER_PAGE := 8   # 4 columns x 2 rows; more items = more pages
@@ -127,7 +128,20 @@ func _update_ad_button() -> void:
 
 
 func _on_watch_ad() -> void:
-	AdService.watch_for_free_coins(_refresh)
+	AdService.watch_for_free_coins(_on_ad_coins)
+
+
+## After the ad: the coin number counts up with a tick sound for every step and a "ka-ching" at the end.
+func _on_ad_coins() -> void:
+	var before: int = maxi(0, GameState.coins - AdService.free_coins_amount())
+	_refresh()
+	var cc := CoinCounter.new()
+	add_child(cc)
+	cc.run(_coin_label, before, GameState.coins, _coin_text)
+
+
+func _coin_text(v: int) -> String:
+	return "Coins: %s" % _fmt(v)
 
 
 func _select_category(cat: String) -> void:

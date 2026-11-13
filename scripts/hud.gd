@@ -18,6 +18,7 @@ signal app_paused       # app lost focus / went to background
 
 const UITheme = preload("res://scripts/ui_theme.gd")
 const Joystick = preload("res://scripts/joystick.gd")
+const CoinCounter = preload("res://scripts/coin_counter.gd")
 
 var joystick   # read by game.gd: joystick.direction
 
@@ -29,6 +30,7 @@ var _level_label: Label
 var _progress: ProgressBar
 var _banner: Label
 var _overlay: Control = null
+var _overlay_labels: Array = []   # the text lines of the current overlay (the coin line is counted up)
 var _flash: ColorRect
 var _last_size := -1
 var _last_score := -1
@@ -76,7 +78,15 @@ func _ready() -> void:
 	left.add_child(_size_label)
 	left.add_child(_score_label)
 	left.add_child(_coin_label)
-	row.add_child(left)
+	var pill := PanelContainer.new()   # a soft dark pill behind the numbers so they are easy to read on every background
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pill_box := StyleBoxFlat.new()
+	pill_box.bg_color = Color(0.0, 0.1, 0.2, 0.38)
+	pill_box.set_corner_radius_all(18)
+	pill_box.set_content_margin_all(10)
+	pill.add_theme_stylebox_override("panel", pill_box)
+	pill.add_child(left)
+	row.add_child(pill)
 
 	var mid := VBoxContainer.new()
 	mid.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -227,6 +237,7 @@ func clear_overlay() -> void:
 
 func _show_overlay(title: String, title_color: Color, lines: Array, buttons: Array) -> void:
 	clear_overlay()
+	_overlay_labels = []
 	var dim := ColorRect.new()
 	dim.color = Color(0.0, 0.05, 0.12, 0.7)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -247,6 +258,7 @@ func _show_overlay(title: String, title_color: Color, lines: Array, buttons: Arr
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size = Vector2(600, 0)
 		vb.add_child(l)
+		_overlay_labels.append(l)
 	for b in buttons:
 		var btn := UITheme.button(str(b[0]), b[1], 400.0, 72.0)
 		btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -295,6 +307,41 @@ func show_win(d: Dictionary) -> void:
 	buttons.append(["Fish Shop", _emit_shop])
 	buttons.append(["Main Menu", _emit_menu])
 	_show_overlay(title, Color("#7dff9a"), lines, buttons)
+	_animate_win_coins(d, lines)
+
+
+## The coins of the level are counted up with a tick sound for every step and a "ka-ching" at the end.
+## (The coins were already added to your total; this is only the show.)
+func _animate_win_coins(d: Dictionary, lines: Array) -> void:
+	var gain: int = int(d["coins_run"]) + int(d["bonus_coins"])
+	if _overlay_labels.size() > 3 and gain > 0 and not d.get("count_done", false):
+		d["count_done"] = true
+		var lbl: Label = _overlay_labels[3]
+		var base: int = int(d["coins_total"]) - gain
+		lbl.text = "Coins: +0   (total %d)" % base
+		var cc := CoinCounter.new()
+		add_child(cc)
+		cc.finished.connect(_set_label_text.bind(lbl, str(lines[3])))   # at the end show the full line again
+		cc.run(lbl, 0, gain, _win_coin_text.bind(base))
+	elif d.get("double_done", false) and not d.get("double_anim", false) and _overlay_labels.size() > 4:
+		d["double_anim"] = true
+		var lbl2: Label = _overlay_labels[4]
+		var cc2 := CoinCounter.new()
+		add_child(cc2)
+		cc2.run(lbl2, 0, int(d.get("double_gain", 0)), _doubled_text)
+
+
+func _win_coin_text(v: int, base: int) -> String:
+	return "Coins: +%d   (total %d)" % [v, base + v]
+
+
+func _doubled_text(v: int) -> String:
+	return "Coins doubled!  +%d" % v
+
+
+func _set_label_text(lbl: Label, text: String) -> void:
+	if is_instance_valid(lbl):
+		lbl.text = text
 
 
 func show_lose(d: Dictionary) -> void:

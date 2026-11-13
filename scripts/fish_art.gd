@@ -174,6 +174,8 @@ static func draw_fish(c: CanvasItem, xf: Transform2D, s: float, kind: int, body:
 	c.draw_colored_polygon(_map(xf, body_pts), body)
 	var lower: PackedVector2Array = body_pts.slice(0, 5) if kind == 3 else (body_pts.slice(0, 4) if kind == 4 else body_pts.slice(0, 13))
 	c.draw_colored_polygon(_map(xf, lower), belly)
+	if kind != 4:   # a soft shine on the upper body
+		c.draw_colored_polygon(_map(xf, _oval(0.08 * bx * s, -by * s * 0.52, 0.42 * bx * s, 0.14 * by * s)), Color(1, 1, 1, 0.2))
 
 	# --- species details drawn on the body ---
 	if nose_kind == "hammer":   # hammerhead: wide T-shaped head
@@ -236,6 +238,7 @@ static func draw_fish(c: CanvasItem, xf: Transform2D, s: float, kind: int, body:
 	else:
 		c.draw_circle(xf * eye, er, Color.WHITE)
 		c.draw_circle(xf * (eye + Vector2(0.06 * s, 0.0)), er * 0.55, Color(0.08, 0.08, 0.12))
+		c.draw_circle(xf * (eye + Vector2(0.1 * s, -0.08 * s)), er * 0.24, Color(1, 1, 1, 0.95))   # sparkle in the eye
 	if kind == 3 or bool(spec.get("angry", false)):   # angry eyebrow
 		c.draw_line(xf * (eye + Vector2(-0.25 * s, -0.3 * s)), xf * (eye + Vector2(0.28 * s, -0.05 * s)), Color(0.1, 0.1, 0.15), maxf(2.0, s * 0.07))
 

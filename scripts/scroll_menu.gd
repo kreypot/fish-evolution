@@ -33,9 +33,16 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 
-func add_item(text: String, callback: Callable) -> void:
-	_items.append([text, callback])
+## `color`: optional colour of this item's button (leave out for the normal blue).
+func add_item(text: String, callback: Callable, color: Color = Color(0, 0, 0, 0)) -> void:
+	_items.append([text, callback, color])
 	queue_redraw()
+
+
+func set_item_color(index: int, color: Color) -> void:
+	if index >= 0 and index < _items.size():
+		_items[index][2] = color
+		queue_redraw()
 
 
 ## Change the text of an item that was already added (used by the daily reward item).
@@ -151,15 +158,32 @@ func _draw() -> void:
 		if y > size.y or y + item_h < 0.0:
 			continue
 		var pressed: bool = _touching and not _dragging and _press_index == i
-		var col: Color = ITEM_PRESSED if pressed else ITEM_COLOR
+		var base_col: Color = ITEM_COLOR
+		var custom: Color = _items[i][2]
+		if custom.a > 0.0:
+			base_col = custom
+		var col: Color = base_col.darkened(0.22) if pressed else base_col
+		var off: float = 3.0 if pressed else 0.0
 		var box := StyleBoxFlat.new()
 		box.bg_color = col
-		box.set_corner_radius_all(22)
-		box.border_width_bottom = 5
-		box.border_color = col.darkened(0.3)
-		draw_style_box(box, Rect2(x0, y + (3.0 if pressed else 0.0), item_w, item_h))
+		box.set_corner_radius_all(24)
+		box.set_border_width_all(3)
+		box.border_width_bottom = 3 if pressed else 8
+		box.border_color = col.darkened(0.35)
+		if not pressed:
+			box.shadow_color = Color(0, 0, 0, 0.28)
+			box.shadow_size = 5
+			box.shadow_offset = Vector2(0, 3)
+		draw_style_box(box, Rect2(x0, y + off, item_w, item_h))
+		# a soft light on the top half gives the button a glossy look
+		var gloss := StyleBoxFlat.new()
+		gloss.bg_color = Color(1, 1, 1, 0.16)
+		gloss.set_corner_radius_all(18)
+		draw_style_box(gloss, Rect2(x0 + 8.0, y + off + 6.0, item_w - 16.0, item_h * 0.36))
 		var text: String = _items[i][0]
-		draw_string(font, Vector2(x0, y + item_h * 0.5 + float(font_size) * 0.35 + (3.0 if pressed else 0.0)), text, HORIZONTAL_ALIGNMENT_CENTER, item_w, font_size, Color.WHITE)
+		var tpos := Vector2(x0, y + item_h * 0.5 + float(font_size) * 0.35 + off)
+		draw_string_outline(font, tpos, text, HORIZONTAL_ALIGNMENT_CENTER, item_w, font_size, 7, Color(0.0, 0.12, 0.25, 0.85))
+		draw_string(font, tpos, text, HORIZONTAL_ALIGNMENT_CENTER, item_w, font_size, Color.WHITE)
 
 	# little arrows tell the player there is more above / below
 	var pulse: float = 0.55 + 0.35 * sin(_time * 4.0)
