@@ -21,6 +21,10 @@ scripts/powerup.gd
 scripts/hazard.gd
 scripts/current_zone.gd
 scripts/boss.gd
+scripts/lobby.gd
+scripts/arena.gd
+scenes/lobby.tscn
+scenes/arena.tscn
 scripts/decor_chunk.gd
 scripts/finish_gate.gd
 scripts/fish.gd

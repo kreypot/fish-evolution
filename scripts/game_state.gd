@@ -54,7 +54,7 @@ var joystick_size: int = 1       # 0 small, 1 normal, 2 large
 var low_quality: bool = false    # fewer effects and 30 frames per second (saves battery, helps old phones)
 
 # --- Stats, daily missions and achievements (Update A2) -------------------------------------------------
-var stats: Dictionary = {"eaten": 0, "wins": 0, "deaths": 0, "coins": 0, "seconds": 0, "best_combo": 0, "biggest": 0, "best_streak": 0, "bosses": 0, "powerups": 0}
+var stats: Dictionary = {"eaten": 0, "wins": 0, "deaths": 0, "coins": 0, "seconds": 0, "best_combo": 0, "biggest": 0, "best_streak": 0, "bosses": 0, "powerups": 0, "mp_wins": 0}
 var mission_day: int = 0                         # the day (see today_number) the current missions belong to
 var mission_progress: Array = [0, 0, 0]
 var mission_claimed: Array = [false, false, false]
@@ -100,6 +100,8 @@ const ACHIEVEMENTS := [
 	{"id": "boss_30", "name": "Boss Master", "text": "Outswim 30 bosses", "stat": "bosses", "target": 30, "reward": 2000},
 	{"id": "power_25", "name": "Power Collector", "text": "Collect 25 power-ups", "stat": "powerups", "target": 25, "reward": 150},
 	{"id": "power_200", "name": "Power Master", "text": "Collect 200 power-ups", "stat": "powerups", "target": 200, "reward": 500},
+	{"id": "arena_1", "name": "Arena Champion", "text": "Win a Wi-Fi battle", "stat": "mp_wins", "target": 1, "reward": 150},
+	{"id": "arena_10", "name": "Arena Master", "text": "Win 10 Wi-Fi battles", "stat": "mp_wins", "target": 10, "reward": 600},
 	{"id": "time_1h", "name": "Deep Diver", "text": "Play for 1 hour", "stat": "seconds", "target": 3600, "reward": 100},
 ]
 
@@ -448,6 +450,8 @@ func note_add(kind: String, amount: int = 1) -> void:
 		stats["bosses"] = int(stats["bosses"]) + amount
 	elif kind == "power":
 		stats["powerups"] = int(stats["powerups"]) + amount
+	elif kind == "mpwin":
+		stats["mp_wins"] = int(stats["mp_wins"]) + amount
 	for i in _missions.size():
 		if str(_missions[i]["kind"]) == kind:
 			mission_progress[i] = int(mission_progress[i]) + amount
@@ -468,6 +472,38 @@ func note_max(kind: String, value: int) -> void:
 ## Every 10th level (10, 20, ... 300) has a boss.
 func is_boss_level(n: int) -> bool:
 	return n >= 10 and n % 10 == 0
+
+
+# --- Wi-Fi battles (arena) ---------------------------------------------------------------------------------------
+var mp_roster: Array = []   # the players of the battle that starts or is running: [{"id", "name", "look", "bot"}]
+var mp_seed: int = 0
+
+
+## The name of the fish species you have equipped (used as your name in a battle).
+func my_species_name() -> String:
+	var it: Dictionary = get_item(str(get_look()["species"]))
+	return str(it.get("name", "Fish"))
+
+
+## A bot with a random fish (natural colours).
+func make_bot_entry(id: int) -> Dictionary:
+	var list: Array = items_in("species")
+	var sp: Dictionary = list[randi() % list.size()]
+	var spec: Dictionary = sp.get("spec", {})
+	var look := {
+		"species": str(sp["id"]), "spec": spec, "body": sp.get("body", Color("#ffa534")), "belly": sp.get("belly", Color("#ffe08a")),
+		"fin": sp.get("fin", Color("#e0661d")), "rainbow": false, "pattern": int(spec.get("pattern", 0)), "acc": 0,
+		"trail_color": Color.WHITE, "trail_filled": false, "trail_rainbow": false,
+	}
+	return {"id": id, "name": "Bot " + str(sp["name"]), "look": look, "bot": true}
+
+
+## You against 3 bots (practice, and the build test).
+func practice_roster() -> Array:
+	var out: Array = [{"id": 1, "name": my_species_name(), "look": get_look(), "bot": false}]
+	for i in 3:
+		out.append(make_bot_entry(-1 - i))
+	return out
 
 
 func species_total() -> int:
@@ -530,7 +566,7 @@ func stats_text() -> String:
 	text += "Biggest size: %d\n" % int(stats["biggest"])
 	text += "Best combo: x%d\n" % int(stats["best_combo"])
 	text += "Best daily streak: %d\n" % int(stats["best_streak"])
-	text += "Power-ups: %d     Bosses beaten: %d\n" % [int(stats["powerups"]), int(stats["bosses"])]
+	text += "Power-ups: %d   Bosses beaten: %d   Arena wins: %d\n" % [int(stats["powerups"]), int(stats["bosses"]), int(stats["mp_wins"])]
 	text += "Fish owned: %d of %d\n" % [ach_value("fish"), species_total()]
 	text += "Time played: %d h %d min" % [hours, minutes]
 	return text

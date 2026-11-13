@@ -12,7 +12,7 @@ PATTERN='SCRIPT ERROR|Parse Error|Failed to load script|Failed to create an auto
 echo "== import" | tee -a "$LOG"
 $GODOT --headless --path . --import >> "$LOG" 2>&1
 
-for scene in splash main_menu level_select shop game; do
+for scene in splash main_menu level_select shop game lobby arena; do
   echo "== $scene" | tee -a "$LOG"
   out=$($GODOT --headless --path . --quit-after 180 "res://scenes/$scene.tscn" 2>&1)
   echo "$out" >> "$LOG"

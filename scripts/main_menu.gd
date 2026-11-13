@@ -109,6 +109,7 @@ func _build_main() -> void:
 	list.add_item(_daily_text(), _on_daily, _daily_color())   # must stay the 4th item (index 3, see _daily_index)
 	list.add_item("Daily Missions", _on_missions)
 	list.add_item("Stats & Achievements", _on_stats)
+	list.add_item("Wi-Fi Battle", _on_multiplayer, Color("#12a89a"))
 	if AdService.enabled:
 		list.add_item("Free Coins (watch ad)", _on_free_coins, Color("#8a5ae0"))
 	list.add_item("How to Play", _on_help)
@@ -236,6 +237,10 @@ func _refresh_missions() -> void:
 	var back := UITheme.button("Back", _show_menu, 320.0, 70.0)
 	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_missions_vb.add_child(back)
+
+
+func _on_multiplayer() -> void:
+	GameState.go_to("res://scenes/lobby.tscn")
 
 
 func _on_missions() -> void:
