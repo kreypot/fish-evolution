@@ -54,7 +54,7 @@ var joystick_size: int = 1       # 0 small, 1 normal, 2 large
 var low_quality: bool = false    # fewer effects and 30 frames per second (saves battery, helps old phones)
 
 # --- Stats, daily missions and achievements (Update A2) -------------------------------------------------
-var stats: Dictionary = {"eaten": 0, "wins": 0, "deaths": 0, "coins": 0, "seconds": 0, "best_combo": 0, "biggest": 0, "best_streak": 0}
+var stats: Dictionary = {"eaten": 0, "wins": 0, "deaths": 0, "coins": 0, "seconds": 0, "best_combo": 0, "biggest": 0, "best_streak": 0, "bosses": 0, "powerups": 0}
 var mission_day: int = 0                         # the day (see today_number) the current missions belong to
 var mission_progress: Array = [0, 0, 0]
 var mission_claimed: Array = [false, false, false]
@@ -63,13 +63,14 @@ var _missions: Array = []
 
 ## 3 missions per day are picked from these 5 kinds (same missions all day, new ones every day).
 ## "targets" and "rewards" have 3 steps (easy / medium / harder). Change the numbers to rebalance.
-const MISSION_ORDER := ["eat", "win", "coins", "combo", "grow"]
+const MISSION_ORDER := ["eat", "win", "coins", "combo", "grow", "power"]
 const MISSION_TYPES := {
 	"eat": {"text": "Eat %d fish", "targets": [20, 35, 50], "rewards": [40, 60, 90]},
 	"win": {"text": "Finish %d levels", "targets": [1, 2, 3], "rewards": [40, 70, 110]},
 	"coins": {"text": "Collect %d coins in levels", "targets": [60, 120, 200], "rewards": [40, 70, 110]},
 	"combo": {"text": "Reach a COMBO of x%d", "targets": [3, 4, 5], "rewards": [50, 70, 100]},
 	"grow": {"text": "Grow to size %d in one level", "targets": [35, 50, 70], "rewards": [50, 80, 120]},
+	"power": {"text": "Collect %d power-ups", "targets": [2, 3, 5], "rewards": [40, 60, 90]},
 }
 
 ## Achievements. "stat" says what is measured: eaten, wins, deaths, coins, seconds, best_combo, biggest, best_streak,
@@ -94,6 +95,11 @@ const ACHIEVEMENTS := [
 	{"id": "fish_10", "name": "Fish Collector", "text": "Own 10 fish", "stat": "fish", "target": 10, "reward": 300},
 	{"id": "fish_all", "name": "Whole Ocean", "text": "Own every fish", "stat": "fish", "target": 17, "reward": 1000},
 	{"id": "streak_7", "name": "Loyal Swimmer", "text": "Claim 7 daily rewards in a row", "stat": "best_streak", "target": 7, "reward": 200},
+	{"id": "boss_1", "name": "Boss Dodger", "text": "Outswim a boss", "stat": "bosses", "target": 1, "reward": 150},
+	{"id": "boss_10", "name": "Boss Hunter", "text": "Outswim 10 bosses", "stat": "bosses", "target": 10, "reward": 600},
+	{"id": "boss_30", "name": "Boss Master", "text": "Outswim 30 bosses", "stat": "bosses", "target": 30, "reward": 2000},
+	{"id": "power_25", "name": "Power Collector", "text": "Collect 25 power-ups", "stat": "powerups", "target": 25, "reward": 150},
+	{"id": "power_200", "name": "Power Master", "text": "Collect 200 power-ups", "stat": "powerups", "target": 200, "reward": 500},
 	{"id": "time_1h", "name": "Deep Diver", "text": "Play for 1 hour", "stat": "seconds", "target": 3600, "reward": 100},
 ]
 
@@ -438,6 +444,10 @@ func note_add(kind: String, amount: int = 1) -> void:
 		stats["coins"] = int(stats["coins"]) + amount
 	elif kind == "death":
 		stats["deaths"] = int(stats["deaths"]) + amount
+	elif kind == "boss":
+		stats["bosses"] = int(stats["bosses"]) + amount
+	elif kind == "power":
+		stats["powerups"] = int(stats["powerups"]) + amount
 	for i in _missions.size():
 		if str(_missions[i]["kind"]) == kind:
 			mission_progress[i] = int(mission_progress[i]) + amount
@@ -453,6 +463,11 @@ func note_max(kind: String, value: int) -> void:
 	for i in _missions.size():
 		if str(_missions[i]["kind"]) == kind:
 			mission_progress[i] = maxi(int(mission_progress[i]), value)
+
+
+## Every 10th level (10, 20, ... 300) has a boss.
+func is_boss_level(n: int) -> bool:
+	return n >= 10 and n % 10 == 0
 
 
 func species_total() -> int:
@@ -515,6 +530,7 @@ func stats_text() -> String:
 	text += "Biggest size: %d\n" % int(stats["biggest"])
 	text += "Best combo: x%d\n" % int(stats["best_combo"])
 	text += "Best daily streak: %d\n" % int(stats["best_streak"])
+	text += "Power-ups: %d     Bosses beaten: %d\n" % [int(stats["powerups"]), int(stats["bosses"])]
 	text += "Fish owned: %d of %d\n" % [ach_value("fish"), species_total()]
 	text += "Time played: %d h %d min" % [hours, minutes]
 	return text

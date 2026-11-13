@@ -20,12 +20,15 @@ var phase := 0.0
 var turn := 1.0                 # animates smoothly between 1 (right) and -1 (left)
 var look: Dictionary = {}       # shop cosmetics (GameState.get_look())
 var death_t := 0.0              # seconds since the fish was eaten (drives the defeat animation)
+var speed_mult := 1.0           # 1.5 while the SPEED power-up is active
+var shield := false             # SHIELD power-up: blocks one bite or sting
+var magnet := false             # MAGNET power-up: coins fly to you
 var _clock := 0.0
 
 
 func max_speed() -> float:
 	# Growing makes you slower (down to 70%) - the price of being big.
-	return 300.0 * (1.0 - clampf((size_val - 20.0) / 300.0, 0.0, 0.35))
+	return 300.0 * (1.0 - clampf((size_val - 20.0) / 300.0, 0.0, 0.35)) * speed_mult
 
 
 func body_radius() -> float:
@@ -108,3 +111,20 @@ func _draw() -> void:
 	var xf := Transform2D(tilt + wobble, Vector2(t, 1.0), 0.0, Vector2.ZERO)
 	var cols: Array = FishArt.resolve_colors(look, _clock)
 	FishArt.draw_fish(self, xf, s, 0, cols[0], cols[1], cols[2], sin(phase) * (0.2 if dead else 1.0), 0.0 if dead else clampf(mouth * 4.0, 0.0, 1.0), get_stage(), int(look.get("pattern", 0)), int(look.get("acc", 0)), dead, look.get("spec", {}))
+	if dead:
+		return
+	if shield:   # a see-through bubble around the fish
+		var r: float = shown_size * 1.7
+		draw_circle(Vector2.ZERO, r, Color(0.5, 0.9, 1.0, 0.14))
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 40, Color(0.7, 0.95, 1.0, 0.85), 3.0)
+		draw_arc(Vector2.ZERO, r * 0.82, -0.9, 0.1, 10, Color(1, 1, 1, 0.5), 3.0)
+	if magnet:   # a purple ring that keeps expanding
+		var k: float = fposmod(_clock * 1.2, 1.0)
+		draw_arc(Vector2.ZERO, 40.0 + 340.0 * k, 0.0, TAU, 48, Color(0.75, 0.4, 1.0, 0.4 * (1.0 - k)), 3.0)
+	if speed_mult > 1.0:   # speed lines behind the fish
+		var back: float = -signf(t)
+		for i in 3:
+			var yy: float = (float(i) - 1.0) * shown_size * 0.5
+			var x0: float = back * (shown_size * 1.4 + fposmod(_clock * 400.0 + float(i) * 37.0, 60.0))
+			draw_line(Vector2(x0, yy), Vector2(x0 + back * 40.0, yy), Color(1.0, 0.8, 0.3, 0.6), 3.0)
+

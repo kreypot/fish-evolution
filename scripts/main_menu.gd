@@ -132,7 +132,7 @@ func _build_help() -> void:
 	vb.add_theme_constant_override("separation", 14)
 	panel.add_child(vb)
 	vb.add_child(UITheme.label("How to Play", 52, Color("#ffd23a")))
-	var text := "Touch and drag anywhere to swim - the joystick appears under your thumb.\n\nGREEN ring = you can eat it. RED ring = it can eat you!\n\nEat fish to grow and evolve. Every fish gives coins, and eating several quickly gives a COMBO bonus.\n\nCollect coins and spend them in the Fish Shop on new fish: from guppies to sharks and a baby whale!\n\nAvoid jellyfish and reach the chequered FINISH wall. Flags save your progress: if you get eaten after a flag you can continue from it."
+	var text := "Touch and drag anywhere to swim - the joystick appears under your thumb.\n\nGREEN ring = you can eat it. RED ring = it can eat you!\n\nEat fish to grow and evolve. Every fish gives coins, and eating fast gives a COMBO bonus. Spend the coins in the Fish Shop.\n\nGrab glowing power-ups: magnet, shield, speed and coins x2. Avoid jellyfish, sea urchins and mines.\n\nEvery 10th level has a BOSS: keep swimming, and dodge its charge when you see the red \"!\".\n\nReach the chequered FINISH wall. Flags save your progress."
 	var l := UITheme.label(text, 24)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(760, 0)

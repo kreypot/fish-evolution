@@ -64,6 +64,13 @@ func _init() -> void:
 	check(gs.get_level_config(1)["length"] >= 8000.0, "level 1 is long enough (8000+ px, about 40 s)")
 	check(gs.get_level_config(300)["length"] <= 60000.0, "level 300 is not endless")
 	check(gs.get_level_config(1000)["level"] == 300, "level index is clamped to 300")
+	check(gs.is_boss_level(10) and gs.is_boss_level(300) and not gs.is_boss_level(15) and not gs.is_boss_level(5), "boss levels are 10, 20, ... 300")
+	var boss_script = load("res://scripts/boss.gd")
+	var ok_boss := true
+	for n in range(1, 301):
+		if boss_script.speed_for_level(n) >= 195.0:
+			ok_boss = false
+	check(ok_boss, "the boss is always slower than a fully grown player (195 px/s)")
 	var cps: Array = gs.CHECKPOINT_FRACTIONS
 	check(cps.size() == 3 and cps[0] < cps[1] and cps[1] < cps[2] and cps[2] < 1.0, "3 checkpoints in increasing order before the finish")
 

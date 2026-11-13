@@ -17,6 +17,10 @@ const Fx = preload("res://scripts/fx.gd")
 const Coin = preload("res://scripts/coin.gd")
 const Flag = preload("res://scripts/checkpoint_flag.gd")
 const AdConfig = preload("res://scripts/ad_config.gd")
+const PowerUp = preload("res://scripts/powerup.gd")
+const Hazard = preload("res://scripts/hazard.gd")
+const Current = preload("res://scripts/current_zone.gd")
+const Boss = preload("res://scripts/boss.gd")
 
 enum S { TUTORIAL, PLAYING, PAUSED, WON, LOST }
 
@@ -40,6 +44,10 @@ var chunks: Array = []
 var coin_list: Array = []
 var rocks: Array = []       # Vector3(x, y, radius)
 var flags: Array = []       # the 3 checkpoint flags
+var powerup_list: Array = []
+var hazard_list: Array = []
+var current_list: Array = []
+var boss: Boss = null     # the boss of every 10th level (appears at 30 % of the level)
 
 var score := 0
 var eaten := 0
@@ -68,6 +76,9 @@ var _ad_revives_left := 1       # "Watch ad: swim on" uses left in this attempt
 var _ad_revive_busy := false
 var _death_pos := Vector2.ZERO  # where the fish was eaten (for the ad revive)
 var _death_size := 20.0
+var _pu_time := {"magnet": 0.0, "shield": 0.0, "speed": 0.0, "boost": 0.0}   # seconds left of each power-up
+var _pu_text := ""
+var _boss_warn := 0.0
 
 
 func _ready() -> void:
@@ -84,6 +95,7 @@ func _ready() -> void:
 	_build_world()
 	_build_player_and_camera()
 	_spawn_creatures()
+	_spawn_extras()
 	_build_hud()
 	_update_activation()
 	if level == 1 and not GameState.tutorial_seen:
@@ -282,7 +294,7 @@ func _build_hud() -> void:
 
 func _begin_play() -> void:
 	AudioManager.start_music()
-	hud.show_banner("Level %d - %s" % [level, cfg["theme"]["name"]])
+	hud.show_banner("Level %d - %s%s" % [level, cfg["theme"]["name"], "   BOSS LEVEL!" if GameState.is_boss_level(level) else ""])
 
 
 # --- Main loop ---------------------------------------------------------------
@@ -319,10 +331,15 @@ func _process(delta: float) -> void:
 		GameState.stats["seconds"] = int(GameState.stats["seconds"]) + 1   # play time for the stats screen
 
 	_read_input()
+	_update_powerups(delta)
+	_apply_currents(delta)
 	_check_rocks()
 	_check_jellyfish()
+	_check_hazards()
 	_check_coins()
+	_check_powerups()
 	_check_fish()
+	_update_boss(delta)
 	_check_checkpoints()
 	if state == S.PLAYING and player.position.x >= length:
 		_win()
@@ -381,6 +398,15 @@ func _update_activation() -> void:
 	for k in coin_list:
 		var cc: Coin = k
 		cc.active = absf(cc.position.x - cx) < range_x
+	for p in powerup_list:
+		var pp: PowerUp = p
+		pp.active = absf(pp.position.x - cx) < range_x
+	for h in hazard_list:
+		var hh: Hazard = h
+		hh.active = absf(hh.base_pos.x - cx) < range_x
+	for z in current_list:
+		var zz: Current = z
+		zz.active = absf(zz.position.x - cx) < range_x + 300.0
 	for c in chunks:
 		var ch: DecorChunk = c
 		ch.active = absf(ch.x0 + CHUNK_W * 0.5 - cx) < range_x + CHUNK_W
@@ -404,6 +430,10 @@ func _check_fish() -> void:
 		elif f.relation == 2:
 			if god_mode or player.invuln > 0.0:   # invulnerable right after a checkpoint continue
 				continue
+			if _shield_blocks(f.position):   # the shield pops: the predator is pushed away and calmed down
+				f.calm(2.5)
+				f.position += (f.position - ppos).normalized() * 160.0
+				continue
 			_lose(f)
 			return
 		else:   # similar size: they just bump into each other
@@ -421,7 +451,7 @@ func _eat(f: Fish, idx: int) -> void:
 	score += pts + combo_bonus
 	eaten += 1
 	# Coins for eating: bigger fish give more coins (small fish ~2, medium ~5, big predators ~12)
-	var coin_gain: int = maxi(1, int(round(f.size_val * GameState.COIN_PER_SIZE)))
+	var coin_gain: int = maxi(1, int(round(f.size_val * GameState.COIN_PER_SIZE))) * _coin_mult()
 	coins_run += coin_gain
 	GameState.add_coins(coin_gain)
 	GameState.note_add("coins", coin_gain)
@@ -467,10 +497,11 @@ func _check_coins() -> void:
 		if not c.active:
 			continue
 		if player.position.distance_to(c.position) < pr + Coin.RADIUS:
-			coins_run += c.value
-			GameState.add_coins(c.value)
-			GameState.note_add("coins", int(c.value))
-			score += 5 * c.value
+			var cv: int = int(c.value) * _coin_mult()
+			coins_run += cv
+			GameState.add_coins(cv)
+			GameState.note_add("coins", cv)
+			score += 5 * cv
 			fx.burst(c.position, Color(1.0, 0.85, 0.2), 5, 120.0)
 			AudioManager.play_sfx("coin", -4.0)
 			coin_list.remove_at(i)
@@ -503,6 +534,8 @@ func _check_jellyfish() -> void:
 		if not jj.active:
 			continue
 		if player.position.distance_to(jj.position) < Jelly.RADIUS * 0.9 + pr * 0.55:
+			if _shield_blocks(jj.position):
+				return
 			player.sting()
 			player.velocity = (player.position - jj.position).normalized() * 450.0
 			stings += 1
@@ -515,7 +548,7 @@ func _check_jellyfish() -> void:
 			return
 
 
-func _lose(killer: Fish) -> void:
+func _lose(killer) -> void:   # a Fish or the Boss: both have chomp()
 	if state != S.PLAYING:
 		return
 	state = S.LOST
@@ -584,6 +617,7 @@ func _continue_from_checkpoint() -> void:
 			ff.position.x = minf(ff.position.x + 900.0, length - 200.0)
 			ff.calm(3.0)
 	_update_activation()
+	_reset_boss(back)
 	state = S.PLAYING
 	hud.show_banner("Continue!   %d left" % _continues_left)
 	fx.ring(back, 10.0, 160.0, Color(0.5, 1.0, 0.6), 0.6)
@@ -621,11 +655,223 @@ func _do_ad_revive() -> void:
 			ff.position.x = minf(ff.position.x + 900.0, length - 200.0)
 			ff.calm(3.0)
 	_update_activation()
+	_reset_boss(back)
 	state = S.PLAYING
 	hud.show_banner("Back in the water!")
 	fx.ring(back, 10.0, 160.0, Color(0.5, 1.0, 0.6), 0.6)
 	fx.sparkles(back, Color(0.6, 1.0, 0.7), 12, 280.0)
 	AudioManager.play_sfx("grow")
+
+
+# --- Update B: power-ups, hazards, currents and bosses ------------------------------------------------
+
+## Power-ups, water currents, sea urchins (level 8+) and mines (level 12+). They are created AFTER everything else
+## so the layout of fish, rocks and coins of every level stays exactly as before.
+func _spawn_extras() -> void:
+	var kms: float = length / 1000.0
+	var t: float = cfg["t"]
+	var u: float = cfg["u"]
+	for i in int(kms * 0.55) + 1:   # about one power-up every 2 km
+		var pu := PowerUp.new()
+		pu.kind = _pick_powerup_kind()
+		pu.position = Vector2(rng.randf_range(900.0, length - 300.0), rng.randf_range(170.0, 780.0))
+		pu.z_index = 1
+		add_child(pu)
+		powerup_list.append(pu)
+	if level >= 6:
+		var dirs: Array = [Vector2.RIGHT, Vector2.RIGHT, Vector2.LEFT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]
+		for i in int(kms * (0.25 + 0.35 * t + 0.3 * u)):
+			var z := Current.new()
+			z.zone_size = Vector2(rng.randf_range(420.0, 620.0), rng.randf_range(150.0, 230.0))
+			z.position = Vector2(rng.randf_range(1000.0, length - 400.0), rng.randf_range(220.0, 740.0))
+			z.dir = dirs[rng.randi_range(0, 5)]
+			z.z_index = -2
+			add_child(z)
+			current_list.append(z)
+	if level >= 8:
+		for i in int(kms * (0.6 + 1.2 * t + 0.8 * u)):
+			var x: float = rng.randf_range(1000.0, length - 300.0)
+			_add_hazard("urchin", Vector2(x, DecorChunk.floor_y(x) - 18.0))
+	if level >= 12:
+		for i in int(kms * (0.35 + 1.2 * t + 0.8 * u)):
+			_add_hazard("mine", Vector2(rng.randf_range(1000.0, length - 300.0), rng.randf_range(220.0, 760.0)))
+
+
+func _add_hazard(kind_name: String, pos: Vector2) -> void:
+	var h := Hazard.new()
+	h.kind = kind_name
+	h.base_pos = pos
+	h.phase = rng.randf_range(0.0, TAU)
+	h.z_index = 1
+	add_child(h)
+	hazard_list.append(h)
+
+
+func _pick_powerup_kind() -> String:
+	var r: float = rng.randf()
+	if r < 0.3:
+		return "magnet"
+	if r < 0.6:
+		return "shield"
+	if r < 0.8:
+		return "speed"
+	return "boost"
+
+
+func _coin_mult() -> int:
+	return 2 if float(_pu_time["boost"]) > 0.0 else 1
+
+
+func _check_powerups() -> void:
+	if state != S.PLAYING:
+		return
+	var pr: float = player.body_radius()
+	for i in range(powerup_list.size() - 1, -1, -1):
+		var pu: PowerUp = powerup_list[i]
+		if not pu.active:
+			continue
+		if player.position.distance_to(pu.position) < pr + PowerUp.RADIUS:
+			_collect_powerup(pu)
+			powerup_list.remove_at(i)
+			pu.queue_free()
+
+
+func _collect_powerup(pu: PowerUp) -> void:
+	var k: String = pu.kind
+	_pu_time[k] = float(PowerUp.DURATIONS[k])
+	GameState.note_add("power", 1)
+	var col: Color = PowerUp.COLORS[k]
+	fx.ring(pu.position, 10.0, 150.0, col, 0.5)
+	fx.sparkles(pu.position, col.lightened(0.3), 10, 260.0)
+	fx.popup(player.position + Vector2(0.0, -player.shown_size - 70.0), "%s!  %s" % [PowerUp.NAMES[k], PowerUp.HINTS[k]], col.lightened(0.4), 30)
+	AudioManager.play_sfx("grow", -2.0, 1.2)
+
+
+func _update_powerups(delta: float) -> void:
+	for k in _pu_time.keys():
+		if float(_pu_time[k]) > 0.0:
+			_pu_time[k] = maxf(float(_pu_time[k]) - delta, 0.0)
+	player.speed_mult = 1.5 if float(_pu_time["speed"]) > 0.0 else 1.0
+	player.shield = float(_pu_time["shield"]) > 0.0
+	player.magnet = float(_pu_time["magnet"]) > 0.0
+	if player.magnet:
+		for k in coin_list:
+			var c: Coin = k
+			if c.active and c.position.distance_to(player.position) < 380.0:
+				c.position = c.position.move_toward(player.position, 620.0 * delta)
+	var text := ""
+	for k in PowerUp.KINDS:
+		var left: float = float(_pu_time[k])
+		if left > 0.0:
+			text += "%s %ds   " % [PowerUp.NAMES[k], int(ceil(left))]
+	if text != _pu_text:
+		_pu_text = text
+		hud.set_powerups(text.strip_edges())
+
+
+## If the shield is on, it pops and the bite/sting/explosion does nothing. Returns true when it blocked.
+func _shield_blocks(from: Vector2) -> bool:
+	if float(_pu_time["shield"]) <= 0.0:
+		return false
+	_pu_time["shield"] = 0.0
+	player.shield = false
+	player.invuln = 1.5
+	player.velocity = (player.position - from).normalized() * 380.0
+	fx.ring(player.position, player.shown_size, player.shown_size * 3.5, Color(0.6, 0.95, 1.0), 0.5)
+	fx.sparkles(player.position, Color(0.7, 0.95, 1.0), 12, 300.0)
+	fx.popup(player.position + Vector2(0.0, -player.shown_size - 50.0), "SHIELD!", Color(0.7, 0.95, 1.0), 40)
+	hud.flash(Color(0.6, 0.95, 1.0), 0.2, 0.3)
+	AudioManager.play_sfx("hurt", -6.0, 1.5)
+	_shake = maxf(_shake, 8.0)
+	return true
+
+
+func _check_hazards() -> void:
+	if state != S.PLAYING or player.invuln > 0.0:
+		return
+	var pr: float = player.body_radius()
+	for i in range(hazard_list.size() - 1, -1, -1):
+		var h: Hazard = hazard_list[i]
+		if not h.active:
+			continue
+		if player.position.distance_to(h.position) >= h.hit_radius() + pr * 0.55:
+			continue
+		if _shield_blocks(h.position):
+			if h.kind == "mine":
+				fx.burst(h.position, Color(1.0, 0.6, 0.2), 16, 260.0)
+				hazard_list.remove_at(i)
+				h.queue_free()
+			return
+		if h.kind == "mine":   # BOOM: you shrink a lot and are thrown back
+			player.size_val = maxf(GameState.MIN_SIZE, player.size_val * 0.78)
+			player.invuln = 1.6
+			player.velocity = (player.position - h.position).normalized() * 560.0
+			fx.burst(h.position, Color(1.0, 0.6, 0.2), 26, 320.0)
+			fx.burst(h.position, Color(1.0, 0.9, 0.5), 12, 200.0)
+			fx.ring(h.position, 10.0, 200.0, Color(1.0, 0.5, 0.2), 0.5)
+			fx.popup(player.position + Vector2(0.0, -60.0), "BOOM!", Color(1.0, 0.6, 0.2), 40)
+			_shake = maxf(_shake, 14.0)
+			hud.flash(Color(1.0, 0.5, 0.2), 0.3, 0.4)
+			AudioManager.play_sfx("chomp", -3.0)
+			hazard_list.remove_at(i)
+			h.queue_free()
+		else:   # urchin: like a jellyfish sting
+			player.sting()
+			player.velocity = (player.position - h.position).normalized() * 450.0
+			stings += 1
+			fx.burst(player.position, Color(0.7, 0.3, 0.9), 10)
+			fx.popup(player.position + Vector2(0.0, -60.0), "Ouch!", Color(0.8, 0.5, 1.0))
+			_shake = maxf(_shake, 7.0)
+			hud.flash(Color(0.7, 0.3, 0.9), 0.22, 0.3)
+			AudioManager.play_sfx("hurt")
+		return
+
+
+## Water currents push the player (only the player) while inside the zone.
+func _apply_currents(delta: float) -> void:
+	if state != S.PLAYING:
+		return
+	for z in current_list:
+		var zz: Current = z
+		if zz.active and zz.contains(player.position):
+			player.velocity += zz.dir * zz.strength * delta
+
+
+## The boss appears at 30 % of every 10th level and hunts the player until the finish.
+func _update_boss(delta: float) -> void:
+	if state != S.PLAYING or not GameState.is_boss_level(level):
+		return
+	if boss == null:
+		if player.position.x >= length * 0.3:
+			boss = Boss.new()
+			boss.setup(level, world_rect, player, float(cfg["theme"]["pred_hue"]))
+			boss.position = Vector2(maxf(player.position.x - 1000.0, 0.0), clampf(player.position.y, 150.0, 800.0))
+			boss.z_index = 2
+			add_child(boss)
+			hud.show_banner("BOSS! Swim to the finish!")
+			hud.flash(Color(1.0, 0.15, 0.1), 0.3, 0.6)
+			_shake = maxf(_shake, 12.0)
+			AudioManager.play_sfx("chomp", -3.0)
+		return
+	if boss.gone:
+		return
+	_boss_warn -= delta
+	var dist: float = boss.position.distance_to(player.position)
+	if dist < 650.0 and _boss_warn <= 0.0:   # red flash when the boss is close
+		_boss_warn = 1.0
+		hud.flash(Color(1.0, 0.2, 0.2), 0.12, 0.3)
+	if player.invuln > 0.0:
+		return
+	if player.position.distance_to(boss.hit_center()) < boss.hit_radius() + player.body_radius() * 0.5:
+		if _shield_blocks(boss.position):
+			boss.block()
+		else:
+			_lose(boss)
+
+
+func _reset_boss(back: Vector2) -> void:
+	if boss != null and not boss.gone:
+		boss.reset_to(Vector2(maxf(back.x - 1100.0, 0.0), back.y), 3.0)
 
 
 func _win() -> void:
@@ -637,6 +883,11 @@ func _win() -> void:
 	var par_time: float = length / 200.0             # a calm pace; finish faster than this for a speed bonus
 	score += maxi(0, int(par_time - elapsed)) * 4
 	var bonus_coins := 10 + floori(level / 2.0)
+	if GameState.is_boss_level(level):
+		bonus_coins += 50 + level   # boss level bonus
+		GameState.note_add("boss", 1)
+		if boss != null:
+			boss.finish()
 	GameState.add_coins(bonus_coins)
 	GameState.note_add("win", 1)
 	GameState.complete_level(level, score)   # also saves coins
@@ -653,6 +904,7 @@ func _win() -> void:
 		"eaten": eaten,
 		"time": int(elapsed),
 		"is_last": level >= GameState.TOTAL_LEVELS,
+		"boss": GameState.is_boss_level(level),
 	}
 	AdService.register_level_win()
 	hud.update_stats(player.size_val, score, 1.0, GameState.coins)

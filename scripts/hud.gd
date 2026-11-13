@@ -27,6 +27,7 @@ var _size_label: Label
 var _score_label: Label
 var _coin_label: Label
 var _level_label: Label
+var _pu_label: Label   # shows the active power-ups under the progress bar
 var _progress: ProgressBar
 var _banner: Label
 var _overlay: Control = null
@@ -110,6 +111,10 @@ func _ready() -> void:
 	_progress.add_theme_stylebox_override("fill", fill)
 	mid.add_child(_level_label)
 	mid.add_child(_progress)
+	_pu_label = _outlined_label("")
+	_pu_label.add_theme_font_size_override("font_size", 22)
+	_pu_label.add_theme_color_override("font_color", Color("#9fffe0"))
+	mid.add_child(_pu_label)
 	row.add_child(mid)
 
 	var spacer := Control.new()
@@ -133,6 +138,10 @@ func _ready() -> void:
 	_banner.offset_top = 150.0
 	_banner.offset_bottom = 220.0
 	_banner.modulate.a = 0.0
+
+
+func set_powerups(text: String) -> void:
+	_pu_label.text = text
 
 
 func _emit_pause() -> void:
@@ -293,6 +302,8 @@ func show_win(d: Dictionary) -> void:
 	]
 	var buttons: Array = []
 	var title := "Level Complete!"
+	if d.get("boss", false):
+		title = "Boss Beaten!"
 	if d["is_last"]:
 		title = "You beat all %d levels!" % GameState.TOTAL_LEVELS
 	else:
