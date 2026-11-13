@@ -38,6 +38,13 @@ func add_item(text: String, callback: Callable) -> void:
 	queue_redraw()
 
 
+## Change the text of an item that was already added (used by the daily reward item).
+func set_item_text(index: int, text: String) -> void:
+	if index >= 0 and index < _items.size():
+		_items[index][0] = text
+		queue_redraw()
+
+
 func _content_height() -> float:
 	return float(_items.size()) * (item_h + gap) - gap
 

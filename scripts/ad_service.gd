@@ -72,6 +72,10 @@ func maybe_show_interstitial(on_closed: Callable) -> bool:
 		return false
 	if GameState.current_level < AdConfig.FIRST_AD_LEVEL:
 		return false
+	if Time.get_ticks_msec() < AdConfig.NO_INTERSTITIAL_FIRST_SEC * 1000:
+		return false
+	if Time.get_ticks_msec() - _last_reward_ms < AdConfig.NO_INTERSTITIAL_AFTER_REWARDED_SEC * 1000:
+		return false
 	if _wins_since_interstitial < AdConfig.INTERSTITIAL_EVERY_N_WINS:
 		return false
 	if Time.get_ticks_msec() - _last_ad_ms < AdConfig.INTERSTITIAL_MIN_GAP_SEC * 1000:

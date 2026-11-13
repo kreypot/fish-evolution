@@ -16,6 +16,7 @@ const Gate = preload("res://scripts/finish_gate.gd")
 const Fx = preload("res://scripts/fx.gd")
 const Coin = preload("res://scripts/coin.gd")
 const Flag = preload("res://scripts/checkpoint_flag.gd")
+const AdConfig = preload("res://scripts/ad_config.gd")
 
 enum S { TUTORIAL, PLAYING, PAUSED, WON, LOST }
 
@@ -63,6 +64,10 @@ var _cp_pos := Vector2.ZERO
 var _cp_size := 20.0
 var _continues_left := 3
 var _stats: Dictionary = {}
+var _ad_revives_left := 1       # "Watch ad: swim on" uses left in this attempt
+var _ad_revive_busy := false
+var _death_pos := Vector2.ZERO  # where the fish was eaten (for the ad revive)
+var _death_size := 20.0
 
 
 func _ready() -> void:
@@ -74,6 +79,7 @@ func _ready() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	_continues_left = GameState.CONTINUES_PER_ATTEMPT
+	_ad_revives_left = AdConfig.AD_REVIVES_PER_ATTEMPT
 	_cp_size = GameState.PLAYER_START_SIZE
 	_build_world()
 	_build_player_and_camera()
@@ -269,6 +275,7 @@ func _build_hud() -> void:
 	hud.back_requested.connect(_on_back)
 	hud.shop_requested.connect(_go_shop)
 	hud.continue_requested.connect(_continue_from_checkpoint)
+	hud.ad_revive_requested.connect(_revive_with_ad)
 	hud.double_coins_requested.connect(_on_double_coins)
 	hud.app_paused.connect(_pause)
 
@@ -507,6 +514,8 @@ func _lose(killer: Fish) -> void:
 		return
 	state = S.LOST
 	_combo = 0
+	_death_pos = player.position
+	_death_size = player.size_val
 	player.dead = true
 	killer.chomp()   # the predator lunges with its mouth wide open
 	hud.joystick.reset()
@@ -574,6 +583,43 @@ func _continue_from_checkpoint() -> void:
 	AudioManager.play_sfx("grow")
 
 
+## "Watch ad: swim on!" on the lose screen (only offered when no checkpoint continue is left).
+## The fish is revived only if the video was watched to the end.
+func _revive_with_ad() -> void:
+	if state != S.LOST or _ad_revives_left <= 0 or _ad_revive_busy:
+		return
+	_ad_revive_busy = true
+	AdService.show_rewarded(_do_ad_revive, _on_ad_revive_closed)
+
+
+func _on_ad_revive_closed() -> void:
+	_ad_revive_busy = false
+
+
+func _do_ad_revive() -> void:
+	if state != S.LOST or _ad_revives_left <= 0:
+		return
+	_ad_revives_left -= 1
+	Engine.time_scale = 1.0
+	_slowmo = 0.0
+	hud.clear_overlay()
+	var back := Vector2(maxf(_death_pos.x - 250.0, 140.0), clampf(_death_pos.y, 120.0, 800.0))
+	player.revive(back, _death_size)
+	camera.position = player.position + Vector2(160.0, 0.0)
+	camera.reset_smoothing()
+	for f in fish_list:   # clear predators out of the revive area
+		var ff: Fish = f
+		if ff.relation == 2 and ff.position.distance_to(back) < 550.0:
+			ff.position.x = minf(ff.position.x + 900.0, length - 200.0)
+			ff.calm(3.0)
+	_update_activation()
+	state = S.PLAYING
+	hud.show_banner("Back in the water!")
+	fx.ring(back, 10.0, 160.0, Color(0.5, 1.0, 0.6), 0.6)
+	fx.sparkles(back, Color(0.6, 1.0, 0.7), 12, 280.0)
+	AudioManager.play_sfx("grow")
+
+
 func _win() -> void:
 	state = S.WON
 	player.finished = true
@@ -612,7 +658,9 @@ func _show_end_screen() -> void:
 	if state == S.WON:
 		hud.show_win(_stats)
 	elif state == S.LOST:
-		hud.show_lose({"score": score, "can_continue": _cp_reached >= 0 and _continues_left > 0, "continues": _continues_left})
+		var can_cp: bool = _cp_reached >= 0 and _continues_left > 0
+		var can_ad: bool = (not can_cp) and _ad_revives_left > 0 and AdService.is_rewarded_ready()
+		hud.show_lose({"score": score, "can_continue": can_cp, "continues": _continues_left, "can_ad_revive": can_ad})
 
 
 # --- Pause / navigation ------------------------------------------------------

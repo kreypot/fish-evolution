@@ -40,6 +40,19 @@ var best_scores: Dictionary = {}   # level (int) -> best score (int)
 var launch_count: int = 0         # how many times the game was started (the startup ad is skipped on the first launches)
 var autosave: bool = true          # tests switch this off so they never touch your save file
 
+# --- Daily reward + comfort settings (Update A1) ------------------------------------------------------
+# Coins for day 1..7 of the login streak. After day 7 the streak starts again at day 1.
+# MISS A DAY and the streak starts again at day 1. To change the rewards, edit this list.
+const DAILY_REWARDS := [50, 75, 100, 150, 200, 300, 500]
+const JOYSTICK_SCALES := [0.8, 1.0, 1.3]
+const JOYSTICK_NAMES := ["Small", "Normal", "Large"]
+
+var last_daily_day: int = 0      # day number (see today_number) of the last claimed daily reward, 0 = never
+var daily_streak: int = 0        # which day of the streak was claimed last (1..7)
+var left_handed: bool = false    # mirrors the top bar of the level screen
+var joystick_size: int = 1       # 0 small, 1 normal, 2 large
+var low_quality: bool = false    # fewer effects and 30 frames per second (saves battery, helps old phones)
+
 # --- Shop / cosmetics ---------------------------------------------------------
 var coins: int = 0
 var owned_items: Array = ["sp_goldie", "skin_goldie", "pat_none", "trail_bubbles", "acc_none"]
@@ -113,6 +126,7 @@ var _themes_extended := false
 func _ready() -> void:
 	_ensure_themes()
 	load_game()
+	apply_quality()
 	launch_count += 1   # counts every start of the game
 	save_game()
 
@@ -271,6 +285,50 @@ func get_look(override_id: String = "") -> Dictionary:
 	}
 
 
+## Number of the current day on the phone's calendar (local date). Used by the daily reward.
+func today_number() -> int:
+	var d: Dictionary = Time.get_date_dict_from_system()
+	var unix: int = Time.get_unix_time_from_datetime_dict({"year": d["year"], "month": d["month"], "day": d["day"], "hour": 0, "minute": 0, "second": 0})
+	return floori(float(unix) / 86400.0)
+
+
+## True if today's reward has not been claimed yet. (If the phone clock is set back, nothing can be claimed.)
+func daily_can_claim() -> bool:
+	return today_number() > last_daily_day
+
+
+## The streak day (1..7) that claiming right now would give.
+func daily_next_streak() -> int:
+	var s: int = 1
+	if last_daily_day > 0 and today_number() == last_daily_day + 1:
+		s = daily_streak + 1
+	if s > DAILY_REWARDS.size():
+		s = 1
+	return s
+
+
+func daily_reward_for(streak_day: int) -> int:
+	return int(DAILY_REWARDS[clampi(streak_day - 1, 0, DAILY_REWARDS.size() - 1)])
+
+
+## Gives today's reward. Returns the number of coins (0 if it was already claimed today).
+func claim_daily() -> int:
+	if not daily_can_claim():
+		return 0
+	var s: int = daily_next_streak()
+	var gain: int = daily_reward_for(s)
+	daily_streak = s
+	last_daily_day = today_number()
+	add_coins(gain)
+	save_game()
+	return gain
+
+
+## Low quality mode: 30 frames per second instead of the phone's maximum.
+func apply_quality() -> void:
+	Engine.max_fps = 30 if low_quality else 0
+
+
 func go_to(scene_path: String) -> void:
 	get_tree().paused = false
 	get_tree().change_scene_to_file(scene_path)
@@ -295,6 +353,11 @@ func save_game() -> void:
 	for k in best_scores:
 		cf.set_value("scores", str(k), best_scores[k])
 	cf.set_value("stats", "launch_count", launch_count)
+	cf.set_value("daily", "last_day", last_daily_day)
+	cf.set_value("daily", "streak", daily_streak)
+	cf.set_value("settings", "left_handed", left_handed)
+	cf.set_value("settings", "joystick_size", joystick_size)
+	cf.set_value("settings", "low_quality", low_quality)
 	cf.set_value("shop", "coins", coins)
 	cf.set_value("shop", "owned", owned_items)
 	for cat in equipped:
@@ -315,6 +378,11 @@ func load_game() -> void:
 		for key in cf.get_section_keys("scores"):
 			best_scores[int(key)] = int(cf.get_value("scores", key, 0))
 	launch_count = maxi(0, int(cf.get_value("stats", "launch_count", 0)))
+	last_daily_day = maxi(0, int(cf.get_value("daily", "last_day", 0)))
+	daily_streak = clampi(int(cf.get_value("daily", "streak", 0)), 0, DAILY_REWARDS.size())
+	left_handed = bool(cf.get_value("settings", "left_handed", false))
+	joystick_size = clampi(int(cf.get_value("settings", "joystick_size", 1)), 0, 2)
+	low_quality = bool(cf.get_value("settings", "low_quality", false))
 	coins = maxi(0, int(cf.get_value("shop", "coins", 0)))
 	var saved_owned: Array = cf.get_value("shop", "owned", owned_items)
 	for sid in saved_owned:

@@ -1,12 +1,17 @@
 extends Node2D
 ## Tiny particle system: bubbles, eating bursts and floating score text.
 
-const MAX_PARTICLES := 220
+var MAX_PARTICLES := 220   # lowered in Low quality mode
 
 # particle = [pos, vel, age, lifetime, radius, color, kind, extra]
 #   kind 0 = burst dot, 1 = bubble ring, 2 = filled dot, 3 = expanding ring (extra = end radius), 4 = sparkle (extra = spin)
 var _p: Array = []
 var _texts: Array = []   # [pos, text, age, color, font size]
+
+
+func _ready() -> void:
+	if GameState.low_quality:
+		MAX_PARTICLES = 80
 
 
 func burst(pos: Vector2, color: Color, count: int = 10, speed: float = 160.0) -> void:

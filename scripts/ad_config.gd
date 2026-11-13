@@ -26,6 +26,11 @@ const INTERSTITIAL_EVERY_N_WINS := 2   # 1 = after every level you finish, when 
 const INTERSTITIAL_MIN_GAP_SEC := 60   # never two full-screen ads closer together than this
 const FIRST_AD_LEVEL := 3              # no between-level ads before level 3
 
+# --- Smarter ad timing (Update A1) ---------------------------------------------------------------------
+const NO_INTERSTITIAL_FIRST_SEC := 240            # no between-level ads in the first 4 minutes after the game starts
+const NO_INTERSTITIAL_AFTER_REWARDED_SEC := 180   # someone who just chose to watch a video is not shown a forced ad for 3 minutes
+const AD_REVIVES_PER_ATTEMPT := 1                 # "Watch ad: swim on" after being eaten (per level attempt). 0 = switch it off
+
 # --- Rewarded videos (optional, the player chooses to watch) ------------------------------------------
 const REWARDED_COOLDOWN_SEC := 15      # wait this long after a rewarded video before offering the next one
 const FREE_COINS_BASE := 100           # "Free coins" reward = base + per_level x your highest unlocked level

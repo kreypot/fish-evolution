@@ -15,7 +15,7 @@ func _ready() -> void:
 	_canvas = Node2D.new()
 	add_child(_canvas)
 	_canvas.draw.connect(_on_draw)
-	for i in 28:
+	for i in (10 if GameState.low_quality else 28):
 		_bubbles.append(Vector3(randf(), randf(), randf_range(2.0, 9.0)))
 
 
@@ -38,7 +38,7 @@ func _on_draw() -> void:
 	_canvas.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(vp.x, 0), Vector2(vp.x, vp.y), Vector2(0, vp.y)]), PackedColorArray([top, top, bottom, bottom]))
 
 	# light rays
-	for i in 5:
+	for i in (0 if GameState.low_quality else 5):
 		var bx: float = vp.x * (float(i) + 0.5) / 5.0 + sin(_time * 0.25 + float(i) * 1.7) * 80.0 - fmod(cam.x * 0.03, 200.0)
 		_canvas.draw_colored_polygon(PackedVector2Array([Vector2(bx - 30, 0), Vector2(bx + 30, 0), Vector2(bx + 190, vp.y), Vector2(bx + 50, vp.y)]), Color(1, 1, 1, 0.05))
 

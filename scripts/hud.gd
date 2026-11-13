@@ -11,6 +11,7 @@ signal next_requested
 signal tutorial_closed
 signal shop_requested
 signal double_coins_requested   # rewarded ad on the level-complete screen
+signal ad_revive_requested   # "Watch ad: swim on" on the lose screen
 signal continue_requested   # "Continue from checkpoint" on the lose screen
 signal back_requested   # Android back button or Esc
 signal app_paused       # app lost focus / went to background
@@ -106,6 +107,13 @@ func _ready() -> void:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(spacer)
 	row.add_child(UITheme.button("II", _emit_pause, 84.0, 84.0))
+	if GameState.left_handed:
+		# Left-handed layout: the pause button goes to the left edge and the numbers to the right edge.
+		for i in row.get_child_count():
+			row.move_child(row.get_child(row.get_child_count() - 1), i)
+		_size_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
 	# --- level banner ---
 	_banner = _outlined_label("")
@@ -143,6 +151,10 @@ func _emit_double() -> void:
 
 func _emit_continue() -> void:
 	continue_requested.emit()
+
+
+func _emit_ad_revive() -> void:
+	ad_revive_requested.emit()
 
 
 func _emit_shop() -> void:
@@ -293,6 +305,9 @@ func show_lose(d: Dictionary) -> void:
 		lines.append("You reached a flag, so you can keep going!")
 	else:
 		lines.append("Coins you collected are kept. Watch for the red rings!")
+	if d.get("can_ad_revive", false):
+		buttons.append(["Watch ad: swim on!", _emit_ad_revive])
+		lines.append("Or watch a short video to carry on from where you were eaten.")
 	buttons.append(["Retry level", _emit_restart])
 	buttons.append(["Main Menu", _emit_menu])
 	_show_overlay("You were eaten!", Color("#ff7a6a"), lines, buttons)
