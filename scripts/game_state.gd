@@ -53,6 +53,50 @@ var left_handed: bool = false    # mirrors the top bar of the level screen
 var joystick_size: int = 1       # 0 small, 1 normal, 2 large
 var low_quality: bool = false    # fewer effects and 30 frames per second (saves battery, helps old phones)
 
+# --- Stats, daily missions and achievements (Update A2) -------------------------------------------------
+var stats: Dictionary = {"eaten": 0, "wins": 0, "deaths": 0, "coins": 0, "seconds": 0, "best_combo": 0, "biggest": 0, "best_streak": 0}
+var mission_day: int = 0                         # the day (see today_number) the current missions belong to
+var mission_progress: Array = [0, 0, 0]
+var mission_claimed: Array = [false, false, false]
+var unlocked_achs: Array = []                    # ids of unlocked achievements
+var _missions: Array = []
+
+## 3 missions per day are picked from these 5 kinds (same missions all day, new ones every day).
+## "targets" and "rewards" have 3 steps (easy / medium / harder). Change the numbers to rebalance.
+const MISSION_ORDER := ["eat", "win", "coins", "combo", "grow"]
+const MISSION_TYPES := {
+	"eat": {"text": "Eat %d fish", "targets": [20, 35, 50], "rewards": [40, 60, 90]},
+	"win": {"text": "Finish %d levels", "targets": [1, 2, 3], "rewards": [40, 70, 110]},
+	"coins": {"text": "Collect %d coins in levels", "targets": [60, 120, 200], "rewards": [40, 70, 110]},
+	"combo": {"text": "Reach a COMBO of x%d", "targets": [3, 4, 5], "rewards": [50, 70, 100]},
+	"grow": {"text": "Grow to size %d in one level", "targets": [35, 50, 70], "rewards": [50, 80, 120]},
+}
+
+## Achievements. "stat" says what is measured: eaten, wins, deaths, coins, seconds, best_combo, biggest, best_streak,
+## level (highest unlocked level) or fish (fish species owned). The coins are paid once, when it unlocks.
+const ACHIEVEMENTS := [
+	{"id": "eat_100", "name": "Snack Time", "text": "Eat 100 fish", "stat": "eaten", "target": 100, "reward": 50},
+	{"id": "eat_1000", "name": "Hungry Fish", "text": "Eat 1000 fish", "stat": "eaten", "target": 1000, "reward": 150},
+	{"id": "eat_5000", "name": "Ocean Muncher", "text": "Eat 5000 fish", "stat": "eaten", "target": 5000, "reward": 500},
+	{"id": "win_1", "name": "First Swim", "text": "Finish a level", "stat": "wins", "target": 1, "reward": 30},
+	{"id": "win_10", "name": "Getting Started", "text": "Finish 10 levels", "stat": "wins", "target": 10, "reward": 100},
+	{"id": "win_50", "name": "Reef Runner", "text": "Finish 50 levels", "stat": "wins", "target": 50, "reward": 300},
+	{"id": "win_150", "name": "Deep Explorer", "text": "Finish 150 levels", "stat": "wins", "target": 150, "reward": 800},
+	{"id": "lvl_50", "name": "Halfway There", "text": "Reach level 50", "stat": "level", "target": 50, "reward": 200},
+	{"id": "lvl_100", "name": "Century Swimmer", "text": "Reach level 100", "stat": "level", "target": 100, "reward": 500},
+	{"id": "lvl_200", "name": "Deep Sea Master", "text": "Reach level 200", "stat": "level", "target": 200, "reward": 1000},
+	{"id": "lvl_300", "name": "Ocean Legend", "text": "Reach level 300", "stat": "level", "target": 300, "reward": 2000},
+	{"id": "combo_5", "name": "Combo Starter", "text": "Reach a combo of x5", "stat": "best_combo", "target": 5, "reward": 60},
+	{"id": "combo_10", "name": "Combo King", "text": "Reach a combo of x10", "stat": "best_combo", "target": 10, "reward": 200},
+	{"id": "size_100", "name": "Big Fish", "text": "Grow to size 100", "stat": "biggest", "target": 100, "reward": 200},
+	{"id": "coins_5000", "name": "Coin Collector", "text": "Collect 5000 coins in levels", "stat": "coins", "target": 5000, "reward": 300},
+	{"id": "fish_5", "name": "Fish Friend", "text": "Own 5 fish", "stat": "fish", "target": 5, "reward": 100},
+	{"id": "fish_10", "name": "Fish Collector", "text": "Own 10 fish", "stat": "fish", "target": 10, "reward": 300},
+	{"id": "fish_all", "name": "Whole Ocean", "text": "Own every fish", "stat": "fish", "target": 17, "reward": 1000},
+	{"id": "streak_7", "name": "Loyal Swimmer", "text": "Claim 7 daily rewards in a row", "stat": "best_streak", "target": 7, "reward": 200},
+	{"id": "time_1h", "name": "Deep Diver", "text": "Play for 1 hour", "stat": "seconds", "target": 3600, "reward": 100},
+]
+
 # --- Shop / cosmetics ---------------------------------------------------------
 var coins: int = 0
 var owned_items: Array = ["sp_goldie", "skin_goldie", "pat_none", "trail_bubbles", "acc_none"]
@@ -318,10 +362,162 @@ func claim_daily() -> int:
 	var s: int = daily_next_streak()
 	var gain: int = daily_reward_for(s)
 	daily_streak = s
+	stats["best_streak"] = maxi(int(stats["best_streak"]), s)
 	last_daily_day = today_number()
 	add_coins(gain)
 	save_game()
 	return gain
+
+
+# --- Missions, stats and achievements (Update A2) ----------------------------------------------------
+
+## Picks the 3 missions of a day. The same day always gives the same missions.
+func make_missions(day: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = day * 7919 + 17
+	var pool: Array = MISSION_ORDER.duplicate()
+	var out: Array = []
+	for i in 3:
+		var idx: int = rng.randi_range(0, pool.size() - 1)
+		var kind: String = str(pool[idx])
+		pool.remove_at(idx)
+		var tier: int = rng.randi_range(0, 2)
+		var info: Dictionary = MISSION_TYPES[kind]
+		var target: int = int(info["targets"][tier])
+		out.append({"kind": kind, "target": target, "reward": int(info["rewards"][tier]), "text": str(info["text"]) % target})
+	return out
+
+
+## Starts a new set of missions when a new day has begun. (A phone clock set back changes nothing.)
+func refresh_missions() -> void:
+	var t: int = today_number()
+	if t > mission_day:
+		mission_day = t
+		mission_progress = [0, 0, 0]
+		mission_claimed = [false, false, false]
+		_missions = []
+	if _missions.is_empty():
+		_missions = make_missions(mission_day)
+
+
+func today_missions() -> Array:
+	refresh_missions()
+	return _missions
+
+
+func mission_progress_of(i: int) -> int:
+	return int(mission_progress[i])
+
+
+func mission_is_claimed(i: int) -> bool:
+	return bool(mission_claimed[i])
+
+
+## Gives the coins of a finished mission. Returns 0 if it is not finished or was already claimed.
+func claim_mission(i: int) -> int:
+	refresh_missions()
+	if i < 0 or i >= _missions.size() or bool(mission_claimed[i]):
+		return 0
+	if int(mission_progress[i]) < int(_missions[i]["target"]):
+		return 0
+	mission_claimed[i] = true
+	var gain: int = int(_missions[i]["reward"])
+	add_coins(gain)
+	save_game()
+	return gain
+
+
+## game.gd calls this when something that counts happens: "eat", "win", "coins" (amount), "death".
+func note_add(kind: String, amount: int = 1) -> void:
+	refresh_missions()
+	if kind == "eat":
+		stats["eaten"] = int(stats["eaten"]) + amount
+	elif kind == "win":
+		stats["wins"] = int(stats["wins"]) + amount
+	elif kind == "coins":
+		stats["coins"] = int(stats["coins"]) + amount
+	elif kind == "death":
+		stats["deaths"] = int(stats["deaths"]) + amount
+	for i in _missions.size():
+		if str(_missions[i]["kind"]) == kind:
+			mission_progress[i] = int(mission_progress[i]) + amount
+
+
+## "combo" and "grow": only the best value counts.
+func note_max(kind: String, value: int) -> void:
+	refresh_missions()
+	if kind == "combo":
+		stats["best_combo"] = maxi(int(stats["best_combo"]), value)
+	elif kind == "grow":
+		stats["biggest"] = maxi(int(stats["biggest"]), value)
+	for i in _missions.size():
+		if str(_missions[i]["kind"]) == kind:
+			mission_progress[i] = maxi(int(mission_progress[i]), value)
+
+
+func species_total() -> int:
+	var n: int = 0
+	for it in shop_items:
+		if it["cat"] == "species":
+			n += 1
+	return n
+
+
+func ach_value(stat: String) -> int:
+	if stat == "level":
+		return unlocked_level
+	if stat == "fish":
+		var n: int = 0
+		for it in shop_items:
+			if it["cat"] == "species" and owned_items.has(it["id"]):
+				n += 1
+		return n
+	return int(stats.get(stat, 0))
+
+
+## Unlocks every achievement that is reached now, pays its coins once, and returns the newly unlocked ones.
+func check_achievements() -> Array:
+	var got: Array = []
+	for a in ACHIEVEMENTS:
+		if unlocked_achs.has(a["id"]):
+			continue
+		if ach_value(str(a["stat"])) >= int(a["target"]):
+			unlocked_achs.append(str(a["id"]))
+			add_coins(int(a["reward"]))
+			got.append(a)
+	if not got.is_empty():
+		save_game()
+	return got
+
+
+func achievement_line(i: int) -> String:
+	var a: Dictionary = ACHIEVEMENTS[i]
+	var t: int = int(a["target"])
+	if unlocked_achs.has(a["id"]):
+		return "[X] %s - %s   +%d" % [str(a["name"]), str(a["text"]), int(a["reward"])]
+	var v: int = mini(ach_value(str(a["stat"])), t)
+	return "[  ] %s - %s   (%d/%d)  +%d" % [str(a["name"]), str(a["text"]), v, t, int(a["reward"])]
+
+
+func achievements_unlocked_count() -> int:
+	return unlocked_achs.size()
+
+
+func stats_text() -> String:
+	var secs: int = int(stats["seconds"])
+	var hours: int = floori(float(secs) / 3600.0)
+	var minutes: int = floori(float(secs % 3600) / 60.0)
+	var text := ""
+	text += "Fish eaten: %d\n" % int(stats["eaten"])
+	text += "Levels finished: %d   (reached level %d of %d)\n" % [int(stats["wins"]), unlocked_level, TOTAL_LEVELS]
+	text += "Times eaten: %d\n" % int(stats["deaths"])
+	text += "Coins collected in levels: %d\n" % int(stats["coins"])
+	text += "Biggest size: %d\n" % int(stats["biggest"])
+	text += "Best combo: x%d\n" % int(stats["best_combo"])
+	text += "Best daily streak: %d\n" % int(stats["best_streak"])
+	text += "Fish owned: %d of %d\n" % [ach_value("fish"), species_total()]
+	text += "Time played: %d h %d min" % [hours, minutes]
+	return text
 
 
 ## Low quality mode: 30 frames per second instead of the phone's maximum.
@@ -353,6 +549,12 @@ func save_game() -> void:
 	for k in best_scores:
 		cf.set_value("scores", str(k), best_scores[k])
 	cf.set_value("stats", "launch_count", launch_count)
+	for k in stats:
+		cf.set_value("stats", "s_" + str(k), stats[k])
+	cf.set_value("missions", "day", mission_day)
+	cf.set_value("missions", "progress", mission_progress)
+	cf.set_value("missions", "claimed", mission_claimed)
+	cf.set_value("achievements", "unlocked", unlocked_achs)
 	cf.set_value("daily", "last_day", last_daily_day)
 	cf.set_value("daily", "streak", daily_streak)
 	cf.set_value("settings", "left_handed", left_handed)
@@ -378,6 +580,22 @@ func load_game() -> void:
 		for key in cf.get_section_keys("scores"):
 			best_scores[int(key)] = int(cf.get_value("scores", key, 0))
 	launch_count = maxi(0, int(cf.get_value("stats", "launch_count", 0)))
+	for k in stats.keys():
+		stats[k] = maxi(0, int(cf.get_value("stats", "s_" + str(k), 0)))
+	mission_day = maxi(0, int(cf.get_value("missions", "day", 0)))
+	var mp: Array = cf.get_value("missions", "progress", [0, 0, 0])
+	var mc: Array = cf.get_value("missions", "claimed", [false, false, false])
+	mission_progress = [0, 0, 0]
+	mission_claimed = [false, false, false]
+	for i in 3:
+		if i < mp.size():
+			mission_progress[i] = maxi(0, int(mp[i]))
+		if i < mc.size():
+			mission_claimed[i] = bool(mc[i])
+	var ua: Array = cf.get_value("achievements", "unlocked", [])
+	unlocked_achs.clear()
+	for x in ua:
+		unlocked_achs.append(str(x))
 	last_daily_day = maxi(0, int(cf.get_value("daily", "last_day", 0)))
 	daily_streak = clampi(int(cf.get_value("daily", "streak", 0)), 0, DAILY_REWARDS.size())
 	left_handed = bool(cf.get_value("settings", "left_handed", false))

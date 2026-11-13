@@ -316,6 +316,7 @@ func _process(delta: float) -> void:
 	if _survive_acc >= 1.0:
 		_survive_acc -= 1.0
 		score += 1   # 1 point per second survived
+		GameState.stats["seconds"] = int(GameState.stats["seconds"]) + 1   # play time for the stats screen
 
 	_read_input()
 	_check_rocks()
@@ -423,9 +424,13 @@ func _eat(f: Fish, idx: int) -> void:
 	var coin_gain: int = maxi(1, int(round(f.size_val * GameState.COIN_PER_SIZE)))
 	coins_run += coin_gain
 	GameState.add_coins(coin_gain)
+	GameState.note_add("coins", coin_gain)
+	GameState.note_add("eat", 1)
+	GameState.note_max("combo", _combo)
 	var tier_before := int(player.size_val / 10.0)
 	var stage_before: int = player.get_stage()
 	player.eat_fish(f.size_val)
+	GameState.note_max("grow", int(player.size_val))
 
 	# Animation: the fish spins into your mouth (gulp), a shock-wave ring, sparkles, particles and a small screen kick.
 	f.swallow()
@@ -464,6 +469,7 @@ func _check_coins() -> void:
 		if player.position.distance_to(c.position) < pr + Coin.RADIUS:
 			coins_run += c.value
 			GameState.add_coins(c.value)
+			GameState.note_add("coins", int(c.value))
 			score += 5 * c.value
 			fx.burst(c.position, Color(1.0, 0.85, 0.2), 5, 120.0)
 			AudioManager.play_sfx("coin", -4.0)
@@ -534,6 +540,8 @@ func _lose(killer: Fish) -> void:
 	_slowmo = 0.7              # (real seconds)
 	AudioManager.play_sfx("chomp")
 	AudioManager.play_sfx("lose")
+	GameState.note_add("death", 1)
+	_announce_achievements(GameState.check_achievements())
 	GameState.save_game()      # keep the coins you collected
 	_end_delay = 1.6           # (real seconds) until the "You were eaten" screen
 
@@ -630,7 +638,9 @@ func _win() -> void:
 	score += maxi(0, int(par_time - elapsed)) * 4
 	var bonus_coins := 10 + floori(level / 2.0)
 	GameState.add_coins(bonus_coins)
+	GameState.note_add("win", 1)
 	GameState.complete_level(level, score)   # also saves coins
+	_announce_achievements(GameState.check_achievements())
 	_stats = {
 		"coins_run": coins_run,
 		"bonus_coins": bonus_coins,
@@ -652,6 +662,20 @@ func _win() -> void:
 	hud.flash(Color(1.0, 0.95, 0.5), 0.35, 0.8)
 	AudioManager.play_sfx("win")
 	_end_delay = 1.4
+
+
+## Shows a banner when achievements were unlocked (the coins are already paid).
+func _announce_achievements(list: Array) -> void:
+	if list.is_empty():
+		return
+	var reward_total: int = 0
+	for a in list:
+		reward_total += int(a["reward"])
+	if list.size() == 1:
+		hud.show_banner("Achievement: %s  +%d coins" % [str(list[0]["name"]), reward_total])
+	else:
+		hud.show_banner("%d achievements unlocked!  +%d coins" % [list.size(), reward_total])
+	AudioManager.play_sfx("grow")
 
 
 func _show_end_screen() -> void:

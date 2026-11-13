@@ -21,6 +21,14 @@ var _hand_btn: Button
 var _joy_btn: Button
 var _quality_btn: Button
 var _list                # the scrolling main list
+var _missions_panel: Control
+var _missions_vb: VBoxContainer
+var _stats_panel: Control
+var _stats_title: Label
+var _stats_body: Label
+var _stats_page_label: Label
+var _stats_page := 0
+const ACH_PER_PAGE := 6
 var _daily_index := 3    # position of the Daily Reward item in the list
 var _reset_armed := false
 
@@ -32,6 +40,8 @@ func _ready() -> void:
 	_build_settings()
 	_build_about()
 	_build_help()
+	_build_missions()
+	_build_stats()
 	_toast_label = UITheme.label("", 32, Color("#ffd23a"))
 	_toast_label.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	_toast_label.add_theme_constant_override("outline_size", 8)
@@ -88,6 +98,8 @@ func _build_main() -> void:
 	list.add_item("Level Selection", _on_levels)
 	list.add_item("Fish Shop", _on_shop)
 	list.add_item(_daily_text(), _on_daily)   # must stay the 4th item (index 3, see _daily_index)
+	list.add_item("Daily Missions", _on_missions)
+	list.add_item("Stats & Achievements", _on_stats)
 	if AdService.enabled:
 		list.add_item("Free Coins (watch ad)", _on_free_coins)
 	list.add_item("How to Play", _on_help)
@@ -173,6 +185,137 @@ func _build_about() -> void:
 	_about_panel.visible = false
 
 
+# --- Daily missions screen (Update A2) ----------------------------------------------------------------
+
+func _build_missions() -> void:
+	var panel := PanelContainer.new()
+	_missions_vb = VBoxContainer.new()
+	_missions_vb.add_theme_constant_override("separation", 16)
+	panel.add_child(_missions_vb)
+	_missions_panel = _centered(panel)
+	_missions_panel.visible = false
+
+
+func _refresh_missions() -> void:
+	for c in _missions_vb.get_children():
+		_missions_vb.remove_child(c)
+		c.queue_free()
+	_missions_vb.add_child(UITheme.label("Daily Missions", 52, Color("#ffd23a")))
+	_missions_vb.add_child(UITheme.label("New missions every day. Finish them and tap Claim!", 24, Color(1, 1, 1, 0.8)))
+	var list: Array = GameState.today_missions()
+	for i in list.size():
+		var m: Dictionary = list[i]
+		var prog: int = mini(GameState.mission_progress_of(i), int(m["target"]))
+		var done: bool = prog >= int(m["target"])
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 16)
+		var l := UITheme.label("%s\n%d / %d    (+%d coins)" % [str(m["text"]), prog, int(m["target"]), int(m["reward"])], 26)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		l.custom_minimum_size = Vector2(560, 0)
+		row.add_child(l)
+		var btn: Button
+		if GameState.mission_is_claimed(i):
+			btn = UITheme.button("Claimed", _on_missions, 220.0, 72.0)
+			btn.disabled = true
+		elif done:
+			btn = UITheme.button("Claim", _on_claim_mission.bind(i), 220.0, 72.0)
+		else:
+			btn = UITheme.button("Not yet", _on_missions, 220.0, 72.0)
+			btn.disabled = true
+		row.add_child(btn)
+		_missions_vb.add_child(row)
+	var back := UITheme.button("Back", _show_menu, 320.0, 70.0)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_missions_vb.add_child(back)
+
+
+func _on_missions() -> void:
+	_menu_box.visible = false
+	_refresh_missions()
+	_missions_panel.visible = true
+
+
+func _on_claim_mission(i: int) -> void:
+	var gain: int = GameState.claim_mission(i)
+	if gain > 0:
+		AudioManager.play_sfx("coin")
+		_coins_label.text = "Coins: %d" % GameState.coins
+		_toast("+%d coins!" % gain)
+	_refresh_missions()
+
+
+# --- Stats and achievements screen (Update A2) --------------------------------------------------------
+
+func _build_stats() -> void:
+	var panel := PanelContainer.new()
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	panel.add_child(vb)
+	vb.add_child(UITheme.label("Stats & Achievements", 52, Color("#ffd23a")))
+	_stats_title = UITheme.label("", 30, Color.WHITE)
+	vb.add_child(_stats_title)
+	_stats_body = UITheme.label("", 23)
+	_stats_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_stats_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_stats_body.custom_minimum_size = Vector2(840, 300)
+	vb.add_child(_stats_body)
+	_stats_page_label = UITheme.label("", 24, Color(1, 1, 1, 0.8))
+	vb.add_child(_stats_page_label)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_child(UITheme.button("< Prev", _on_stats_prev, 240.0, 70.0))
+	row.add_child(UITheme.button("Next >", _on_stats_next, 240.0, 70.0))
+	row.add_child(UITheme.button("Back", _show_menu, 240.0, 70.0))
+	vb.add_child(row)
+	_stats_panel = _centered(panel)
+	_stats_panel.visible = false
+
+
+func _stats_pages() -> int:
+	return 1 + int(ceil(float(GameState.ACHIEVEMENTS.size()) / float(ACH_PER_PAGE)))
+
+
+func _refresh_stats() -> void:
+	var pages: int = _stats_pages()
+	_stats_page = clampi(_stats_page, 0, pages - 1)
+	if _stats_page == 0:
+		_stats_title.text = "Your Stats"
+		_stats_body.text = GameState.stats_text()
+	else:
+		_stats_title.text = "Achievements  (%d of %d unlocked)" % [GameState.achievements_unlocked_count(), GameState.ACHIEVEMENTS.size()]
+		var start: int = (_stats_page - 1) * ACH_PER_PAGE
+		var text := ""
+		for i in range(start, mini(start + ACH_PER_PAGE, GameState.ACHIEVEMENTS.size())):
+			text += GameState.achievement_line(i) + "\n"
+		_stats_body.text = text
+	_stats_page_label.text = "Page %d / %d" % [_stats_page + 1, pages]
+
+
+func _on_stats() -> void:
+	var got: Array = GameState.check_achievements()   # e.g. "own 5 fish" is noticed here
+	if not got.is_empty():
+		var reward_total: int = 0
+		for a in got:
+			reward_total += int(a["reward"])
+		_coins_label.text = "Coins: %d" % GameState.coins
+		_toast("Achievement unlocked!  +%d coins" % reward_total)
+	_stats_page = 0
+	_refresh_stats()
+	_menu_box.visible = false
+	_stats_panel.visible = true
+
+
+func _on_stats_prev() -> void:
+	_stats_page = (_stats_page - 1 + _stats_pages()) % _stats_pages()
+	_refresh_stats()
+
+
+func _on_stats_next() -> void:
+	_stats_page = (_stats_page + 1) % _stats_pages()
+	_refresh_stats()
+
+
 func _refresh_settings() -> void:
 	_music_btn.text = "Music: %s" % ("ON" if GameState.music_on else "OFF")
 	_sfx_btn.text = "Sound effects: %s" % ("ON" if GameState.sfx_on else "OFF")
@@ -187,6 +330,8 @@ func _show_menu() -> void:
 	_settings_panel.visible = false
 	_about_panel.visible = false
 	_help_panel.visible = false
+	_missions_panel.visible = false
+	_stats_panel.visible = false
 	_reset_armed = false
 	_refresh_settings()
 
