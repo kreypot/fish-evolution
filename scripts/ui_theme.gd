@@ -1,4 +1,6 @@
 extends RefCounted
+
+const ScrollBox = preload("res://scripts/scroll_box.gd")
 ## Shared look for all menus: chunky rounded buttons with a soft shadow, readable outlined text, clean panels.
 ## Usage: some_control.theme = UITheme.make()
 
@@ -20,6 +22,23 @@ static func make() -> Theme:
 	t.set_stylebox("disabled", "Button", _box(Color("#3a5568"), 22, 14, true, true))
 	t.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	t.set_stylebox("panel", "PanelContainer", _panel_box())
+	# thick scroll bars that are easy to see and to drag with a finger
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0, 0, 0, 0.28)
+	track.set_corner_radius_all(9)
+	track.content_margin_left = 9
+	track.content_margin_right = 9
+	t.set_stylebox("scroll", "VScrollBar", track)
+	t.set_stylebox("scroll_focus", "VScrollBar", track)
+	for nm in ["grabber", "grabber_highlight", "grabber_pressed"]:
+		var grab := StyleBoxFlat.new()
+		grab.bg_color = Color(1, 1, 1, 0.55) if nm == "grabber" else (Color("#ffd23a") if nm == "grabber_pressed" else Color(1, 1, 1, 0.8))
+		grab.set_corner_radius_all(9)
+		grab.content_margin_left = 9
+		grab.content_margin_right = 9
+		grab.content_margin_top = 24
+		grab.content_margin_bottom = 24
+		t.set_stylebox(nm, "VScrollBar", grab)
 	return t
 
 
@@ -62,6 +81,24 @@ static func selected_box() -> StyleBoxFlat:
 	sb.set_border_width_all(5)
 	sb.border_color = Color(1.0, 0.82, 0.23)
 	return sb
+
+
+## Makes the content of a panel scroll when it does not fit on the screen. The Back button (or the row of buttons)
+## at the bottom stays visible under the scrolling part.
+static func make_scrollable(panel: PanelContainer, screen_margin: float = 110.0) -> void:
+	if panel.get_child_count() != 1:
+		return
+	var inner: Control = panel.get_child(0)
+	var footer: Control = null
+	if inner.get_child_count() > 1:
+		var last: Node = inner.get_child(inner.get_child_count() - 1)
+		if last is Button or last is HBoxContainer:
+			footer = last
+			inner.remove_child(footer)
+	panel.remove_child(inner)
+	var box := ScrollBox.new()
+	box.setup(inner, true, screen_margin, footer)
+	panel.add_child(box)
 
 
 static func button(text: String, callback: Callable, w: float = 360.0, h: float = 76.0) -> Button:

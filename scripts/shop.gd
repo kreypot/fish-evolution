@@ -6,6 +6,7 @@ extends Control
 const UITheme = preload("res://scripts/ui_theme.gd")
 const CoinCounter = preload("res://scripts/coin_counter.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
+const ScrollBox = preload("res://scripts/scroll_box.gd")
 const FishPreview = preload("res://scripts/fish_preview.gd")
 const ITEMS_PER_PAGE := 8   # 4 columns x 2 rows; more items = more pages
 
@@ -37,7 +38,9 @@ func _ready() -> void:
 
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", 10)
-	margin.add_child(root)
+	var box := ScrollBox.new()   # the whole shop scrolls if the screen is too small
+	box.setup(root, false, 0.0)
+	margin.add_child(box)
 
 	# header: title + coin balance
 	var header := HBoxContainer.new()

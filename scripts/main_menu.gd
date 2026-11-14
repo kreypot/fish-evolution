@@ -4,14 +4,15 @@ extends Control
 
 const UITheme = preload("res://scripts/ui_theme.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
-const ScrollMenu = preload("res://scripts/scroll_menu.gd")
+const MenuHub = preload("res://scripts/menu_hub.gd")
+const ScrollBox = preload("res://scripts/scroll_box.gd")
 const CoinCounter = preload("res://scripts/coin_counter.gd")
 
 var _menu_box: Control
 var _settings_panel: Control
 var _about_panel: Control
 var _help_panel: Control
-var _hint_label: Label
+var _hub                 # the round buttons of the main menu
 var _coins_label: Label
 var _toast_label: Label
 var _privacy_btn: Button
@@ -21,7 +22,6 @@ var _reset_btn: Button
 var _hand_btn: Button
 var _joy_btn: Button
 var _quality_btn: Button
-var _list                # the scrolling main list
 var _coins_shown := 0    # the coin number currently shown (the count-up starts from it)
 var _missions_panel: Control
 var _missions_vb: VBoxContainer
@@ -31,14 +31,13 @@ var _stats_body: Label
 var _stats_page_label: Label
 var _stats_page := 0
 const ACH_PER_PAGE := 6
-var _daily_index := 3    # position of the Daily Reward item in the list
 var _reset_armed := false
 
 
 func _ready() -> void:
 	theme = UITheme.make()
 	var bg = MenuBg.new()
-	bg.show_hero = true   # your fish floats large on the left
+	bg.show_hero = true   # your fish floats large in the middle
 	add_child(bg)
 	_build_main()
 	_build_settings()
@@ -62,6 +61,8 @@ func _ready() -> void:
 
 
 func _centered(content: Control) -> Control:
+	if content is PanelContainer:
+		UITheme.make_scrollable(content)   # scrolls when it does not fit on the screen
 	var center := CenterContainer.new()
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -70,61 +71,84 @@ func _centered(content: Control) -> Control:
 
 
 func _build_main() -> void:
-	# Left: logo. Right: a list of options that you can scroll up and down with your finger.
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 40)
+	# Title on top, your fish in the middle (drawn by the backdrop), round buttons floating all around the screen.
+	_menu_box = Control.new()
+	_menu_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_menu_box)
+	_menu_box.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var hub := MenuHub.new()
+	_menu_box.add_child(hub)
+	_hub = hub
 
-	var left := VBoxContainer.new()
-	left.add_theme_constant_override("separation", 12)
-	left.custom_minimum_size = Vector2(560, 0)
-	left.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var top := VBoxContainer.new()
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_theme_constant_override("separation", -6)
+	_menu_box.add_child(top)
+	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	top.offset_top = 10.0
 	var title := UITheme.label("Fish Evolution", 84, Color("#ffd23a"))
 	title.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	title.add_theme_constant_override("outline_size", 14)
-	var sub := UITheme.label("Ocean Run", 48, Color.WHITE)
+	var sub := UITheme.label("Ocean Run", 44, Color.WHITE)
 	sub.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	sub.add_theme_constant_override("outline_size", 10)
+	top.add_child(title)
+	top.add_child(sub)
+
+	# the coin balance in a pill at the top right
 	_coins_shown = GameState.coins
 	_coins_label = UITheme.label("Coins: %d" % GameState.coins, 32, Color("#ffd23a"))
 	_coins_label.add_theme_color_override("font_outline_color", Color(0, 0.15, 0.3))
 	_coins_label.add_theme_constant_override("outline_size", 8)
-	_hint_label = UITheme.label("Swipe the list up and down  >", 26, Color(1, 1, 1, 0.85))
-	left.add_child(title)
-	left.add_child(sub)
-	left.add_child(_coins_label)
-	left.add_child(_hint_label)
-	var hero_space := Control.new()   # empty room under the title: the backdrop draws your fish here
-	hero_space.custom_minimum_size = Vector2(0, 270)
-	hero_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.add_child(hero_space)
-	row.add_child(left)
+	var pill := PanelContainer.new()
+	pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pill_box := StyleBoxFlat.new()
+	pill_box.bg_color = Color(0.0, 0.1, 0.2, 0.45)
+	pill_box.set_corner_radius_all(24)
+	pill_box.set_content_margin_all(10)
+	pill_box.content_margin_left = 22
+	pill_box.content_margin_right = 22
+	pill.add_theme_stylebox_override("panel", pill_box)
+	pill.add_child(_coins_label)
+	_menu_box.add_child(pill)
+	pill.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	pill.offset_left = -300.0
+	pill.offset_right = -24.0
+	pill.offset_top = 18.0
+	pill.offset_bottom = 78.0
 
-	var list := ScrollMenu.new()
-	list.custom_minimum_size = Vector2(480, 470)
-	list.scrolled_first_time.connect(_on_first_scroll)
-	var play_text := "Play" if GameState.unlocked_level == 1 else "Continue (Level %d)" % GameState.unlocked_level
-	list.add_item(play_text, _on_play, Color("#2fae5a"))
-	list.add_item("Level Selection", _on_levels)
-	list.add_item("Fish Shop", _on_shop, Color("#f08a1c"))
-	list.add_item(_daily_text(), _on_daily, _daily_color())   # must stay the 4th item (index 3, see _daily_index)
-	list.add_item("Daily Missions", _on_missions)
-	list.add_item("Stats & Achievements", _on_stats)
-	list.add_item("Wi-Fi Battle", _on_multiplayer, Color("#12a89a"))
+	var play_text := "Play" if GameState.unlocked_level == 1 else "Continue Lv %d" % GameState.unlocked_level
+	hub.add_bubble("play", play_text, "play", Color("#2fae5a"), Vector2(0.5, 0.82), 76.0, _on_play)
+	hub.add_bubble("levels", "Levels", "levels", Color("#2a8fe0"), Vector2(0.156, 0.32), 58.0, _on_levels)
+	hub.add_bubble("shop", "Fish Shop", "shop", Color("#f08a1c"), Vector2(0.281, 0.5), 58.0, _on_shop)
+	hub.add_bubble("missions", "Missions", "missions", Color("#22b58a"), Vector2(0.102, 0.57), 52.0, _on_missions)
+	hub.add_bubble("daily", _daily_label(), "daily", _daily_color2(), Vector2(0.227, 0.75), 58.0, _on_daily)
+	hub.set_badge("daily", GameState.daily_can_claim())
 	if AdService.enabled:
-		list.add_item("Free Coins (watch ad)", _on_free_coins, Color("#8a5ae0"))
-	list.add_item("How to Play", _on_help)
-	list.add_item("Settings", _on_settings)
-	list.add_item("About", _on_about)
-	list.add_item("Exit Game", _on_quit)
-	row.add_child(list)
-	_list = list
-	_menu_box = _centered(row)
+		hub.add_bubble("coins", "Free Coins", "coins", Color("#8a5ae0"), Vector2(0.844, 0.32), 58.0, _on_free_coins)
+	hub.add_bubble("wifi", "Wi-Fi Battle", "wifi", Color("#1fa2c9"), Vector2(0.719, 0.5), 58.0, _on_multiplayer)
+	hub.add_bubble("stats", "Trophies", "stats", Color("#e0508a"), Vector2(0.898, 0.57), 52.0, _on_stats)
+	hub.add_bubble("help", "How to Play", "help", Color("#4a78c8"), Vector2(0.773, 0.75), 52.0, _on_help)
+	hub.add_bubble("settings", "Settings", "settings", Color("#6b7f94"), Vector2(0.0625, 0.868), 40.0, _on_settings)
+	hub.add_bubble("about", "About", "about", Color("#6b7f94"), Vector2(0.9375, 0.868), 40.0, _on_about)
+	hub.add_bubble("exit", "Exit", "exit", Color("#d9534f"), Vector2(0.0547, 0.105), 38.0, _on_quit)
 
 
-func _on_first_scroll() -> void:
-	if _hint_label != null:
-		var tw := create_tween()
-		tw.tween_property(_hint_label, "modulate:a", 0.0, 0.6)   # the hint fades once you have scrolled
+## Daily Reward bubble: gold with a "!" while the reward is waiting, grey-blue once it is claimed.
+func _daily_label() -> String:
+	if GameState.daily_can_claim():
+		return "Daily +%d" % GameState.daily_reward_for(GameState.daily_next_streak())
+	return "Daily Reward"
+
+
+func _daily_color2() -> Color:
+	return Color("#e3a516") if GameState.daily_can_claim() else Color("#5a86b0")
+
+
+func _refresh_daily_bubble() -> void:
+	_hub.set_text("daily", _daily_label())
+	_hub.set_color("daily", _daily_color2())
+	_hub.set_badge("daily", GameState.daily_can_claim())
 
 
 func _build_help() -> void:
@@ -183,7 +207,7 @@ func _build_about() -> void:
 	var privacy := "Privacy: this game collects no information from your device. It has no ads, no analytics, no accounts, needs no internet and asks for no permissions. Your progress is saved only on your phone."
 	if AdService.enabled:
 		privacy = "Ads: this game shows ads from Google AdMob (when the game starts, between levels, and optional videos for bonus coins). AdMob may use your device's advertising ID; you can reset or opt out in Android Settings > Google > Ads. Your progress is saved only on your phone. See the privacy policy on the store page."
-	var text := "Fish Evolution: Ocean Run  v1.3.0\n\nEat smaller fish to grow, dodge bigger predators, avoid jellyfish and reach the finish wall. 300 levels across 30 underwater worlds, and 17 fish to collect.\n\n" + privacy + "\n\nMade with the Godot Engine (MIT licence). All art and sound are generated in code."
+	var text := "Fish Evolution: Ocean Run  v1.4.0\n\nEat smaller fish to grow, dodge bigger predators, avoid jellyfish and reach the finish wall. 300 levels across 30 underwater worlds, and 17 fish to collect.\n\n" + privacy + "\n\nMade with the Godot Engine (MIT licence). All art and sound are generated in code."
 	var l := UITheme.label(text, 24)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(760, 0)
@@ -471,8 +495,7 @@ func _on_daily() -> void:
 		var gain: int = GameState.claim_daily()
 		AudioManager.play_sfx("coin")
 		_animate_coins()
-		_list.set_item_text(_daily_index, _daily_text())
-		_list.set_item_color(_daily_index, _daily_color())
+		_refresh_daily_bubble()
 		_toast("Day %d reward: +%d coins!" % [day, gain])
 	else:
 		var next_day: int = GameState.daily_streak + 1

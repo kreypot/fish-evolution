@@ -19,6 +19,7 @@ signal app_paused       # app lost focus / went to background
 const UITheme = preload("res://scripts/ui_theme.gd")
 const Joystick = preload("res://scripts/joystick.gd")
 const CoinCounter = preload("res://scripts/coin_counter.gd")
+const ScrollBox = preload("res://scripts/scroll_box.gd")
 
 var joystick   # read by game.gd: joystick.direction
 
@@ -260,7 +261,9 @@ func _show_overlay(title: String, title_color: Color, lines: Array, buttons: Arr
 	center.add_child(panel)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
-	panel.add_child(vb)
+	var box := ScrollBox.new()   # scrolls if the window is taller than the screen
+	box.setup(vb, true, 110.0)
+	panel.add_child(box)
 	vb.add_child(UITheme.label(title, 52, title_color))
 	for line in lines:
 		var l := UITheme.label(str(line), 28)

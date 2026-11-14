@@ -21,6 +21,8 @@ scripts/powerup.gd
 scripts/hazard.gd
 scripts/current_zone.gd
 scripts/boss.gd
+scripts/scroll_box.gd
+scripts/menu_hub.gd
 scripts/lobby.gd
 scripts/arena.gd
 scenes/lobby.tscn

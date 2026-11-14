@@ -13,6 +13,7 @@ const FishArt = preload("res://scripts/fish_art.gd")
 const Background = preload("res://scripts/background.gd")
 const Fx = preload("res://scripts/fx.gd")
 const UITheme = preload("res://scripts/ui_theme.gd")
+const ScrollBox = preload("res://scripts/scroll_box.gd")
 
 const ARENA := Rect2(0.0, 0.0, 1400.0, 800.0)
 const WALL := 40.0
@@ -686,7 +687,9 @@ func _build_overlay(title: String, col: Color, lines: Array, buttons: Array) -> 
 	center.add_child(panel)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 14)
-	panel.add_child(vb)
+	var box := ScrollBox.new()
+	box.setup(vb, true, 110.0)
+	panel.add_child(box)
 	vb.add_child(UITheme.label(title, 56, col))
 	for line in lines:
 		vb.add_child(UITheme.label(str(line), 28))

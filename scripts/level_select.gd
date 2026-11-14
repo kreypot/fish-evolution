@@ -4,6 +4,7 @@ extends Control
 
 const UITheme = preload("res://scripts/ui_theme.gd")
 const MenuBg = preload("res://scripts/menu_bg.gd")
+const ScrollBox = preload("res://scripts/scroll_box.gd")
 const PER_PAGE := 10
 
 var _page := 0
@@ -51,7 +52,11 @@ func _ready() -> void:
 	nav.add_child(UITheme.button("Back", _on_back, 200.0, 70.0))
 	nav.add_child(_next)
 	nav.add_child(_next5)
-	vb.add_child(nav)
+	# if the screen is too small, the levels scroll and the buttons stay at the bottom
+	center.remove_child(vb)
+	var box := ScrollBox.new()
+	box.setup(vb, true, 40.0, nav)
+	center.add_child(box)
 	_refresh()
 
 

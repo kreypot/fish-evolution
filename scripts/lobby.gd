@@ -72,6 +72,8 @@ func _notification(what: int) -> void:
 
 
 func _centered(content: Control) -> Control:
+	if content is PanelContainer:
+		UITheme.make_scrollable(content)   # scrolls when it does not fit on the screen
 	var center := CenterContainer.new()
 	add_child(center)
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

@@ -37,8 +37,8 @@ func _ready() -> void:
 
 
 func _hero_pos() -> Vector2:
-	# The main menu keeps its text on the left and the list on the right; the fish sits under the title.
-	return Vector2(size.x * 0.5 - 260.0, size.y * 0.5 + 140.0 + sin(_time * 1.3) * 12.0)
+	# The main menu has the title on top and the round buttons all around: the fish floats in the middle.
+	return Vector2(size.x * 0.5, size.y * 0.55 + sin(_time * 1.3) * 12.0)
 
 
 func _process(delta: float) -> void:
