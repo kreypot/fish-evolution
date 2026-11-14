@@ -27,8 +27,9 @@ var _clock := 0.0
 
 
 func max_speed() -> float:
-	# Growing makes you slower (down to 70%) - the price of being big.
-	return 300.0 * (1.0 - clampf((size_val - 20.0) / 300.0, 0.0, 0.35)) * speed_mult
+	# The swimming speed stays the same however big you grow (it used to drop to 70 % when you were huge).
+	# To bring the slow-down back: return 300.0 * (1.0 - clampf((size_val - 20.0) / 300.0, 0.0, 0.35)) * speed_mult
+	return 300.0 * speed_mult
 
 
 func body_radius() -> float:

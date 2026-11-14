@@ -39,7 +39,7 @@ func _init() -> void:
 		if n > 1:
 			if c["length"] <= prev["length"] or c["big_density"] < prev["big_density"] or c["predator_speed"] < prev["predator_speed"]:
 				ok_monotonic = false
-		# the slowest the player can ever be is 300 * (1 - 0.35) = 195 px/s
+		# the player now always swims at 300 px/s; predators are still checked against the old, stricter limit of 200
 		if c["predator_speed"] > 200.0:
 			ok_speed = false
 		prev = c
